@@ -4,8 +4,7 @@ Last updated: 2026-06-05
 ## Purpose
 One tool. One daily output. Before market open.
 
-Automates the synthesis a macro-aware trader does manually every morning.
-Not a buy/sell signal. A context layer that answers:
+Automates the daily macro context check — pulling together what an investor needs to understand before markets open. A context layer that answers:
 - Did anything change overnight?
 - Is today's sector flow real or mechanical?
 - Risk-on or risk-off?
