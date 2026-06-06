@@ -109,3 +109,10 @@ Combined with your insider scanner — you'd know both the macro environment AND
 * Mean reversion — stock that moved 3+ standard deviations from mean statistically likely to revert
 * Earnings revision momentum — analysts consistently raising estimates = strong buy signal
 * Price to sales at historical lows — purely mechanical valuation screen
+
+
+This is actually fascinating mechanics. NYSE and Nasdaq publish what they call "Order Imbalance Indicators" — public data feeds showing how much buy vs sell pressure is queued for the close.
+
+3:50pm — first imbalance publication
+Every few seconds after — updates as more orders queue up
+Shows: net imbalance, indicative clearing price, paired shares
