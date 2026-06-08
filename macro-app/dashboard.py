@@ -5,6 +5,22 @@ import time
 st.set_page_config(layout="wide")
 st.title("Macro Dashboard")
 
+# Fixed column width via CSS
+st.markdown("""
+<style>
+[data-testid="stMetric"] {
+    width: 160px;
+    min-width: 160px;
+}
+[data-testid="column"] {
+    width: fit-content !important;
+    flex: unset !important;
+    min-width: 160px !important;
+    max-width: 160px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 def fetch(ticker):
     try:
         data = yf.Ticker(ticker)
@@ -27,14 +43,14 @@ def show_metric(col, label, ticker, help_text):
 
 # --- RISK SENTIMENT ---
 st.markdown("### Risk Sentiment")
-cols = st.columns(4)
+cols = st.columns(8)
 show_metric(cols[0], "VIX", "^VIX", "Fear index. Below 15 = calm. 15-25 = caution. Above 25 = fear. Above 30 = panic.")
 show_metric(cols[1], "Dollar Index", "DX-Y.NYB", "USD strength. Rising = risk-off or strong US growth. Falling = risk-on.")
 show_metric(cols[2], "Put/Call", "^PCCE", "Equity put/call ratio. Below 0.7 = complacency. Above 1.0 = fear.")
 
 # --- EQUITY FUTURES ---
 st.markdown("### Equity Futures")
-cols = st.columns(7)
+cols = st.columns(8)
 show_metric(cols[0], "S&P 500", "ES=F", "S&P 500 futures. Trades 24/7, most useful pre-market.")
 show_metric(cols[1], "NASDAQ", "NQ=F", "NASDAQ 100 futures. Leads tech/growth sentiment.")
 show_metric(cols[2], "Nikkei", "^N225", "Japan. Leads Asian session. Sensitive to USD/JPY and global risk.")
@@ -45,7 +61,7 @@ show_metric(cols[6], "CSI 300", "000300.SS", "China large cap. Key gauge of Chin
 
 # --- RATES ---
 st.markdown("### Rates")
-cols = st.columns(5)
+cols = st.columns(8)
 show_metric(cols[0], "2yr Yield", "^IRX", "2-year Treasury. Most sensitive to Fed rate expectations.")
 show_metric(cols[1], "5yr Yield", "^FVX", "5-year Treasury. Mid-range rates expectations.")
 show_metric(cols[2], "10yr Yield", "^TNX", "10-year Treasury. Rising = growth/inflation up. Falling = safety bid.")
@@ -61,7 +77,7 @@ with cols[4]:
 
 # --- COMMODITIES ---
 st.markdown("### Commodities")
-cols = st.columns(5)
+cols = st.columns(8)
 show_metric(cols[0], "Crude WTI", "CL=F", "WTI crude oil. US benchmark. Key for Energy sector and inflation.")
 show_metric(cols[1], "Crude Brent", "BZ=F", "Brent crude. Global benchmark. Slightly higher than WTI typically.")
 show_metric(cols[2], "Gold", "GC=F", "Safe haven. Rising = risk-off, inflation hedge, or dollar weakness.")
@@ -70,13 +86,13 @@ show_metric(cols[4], "Copper", "HG=F", "Dr Copper. Leading indicator of global e
 
 # --- CRYPTO ---
 st.markdown("### Crypto")
-cols = st.columns(4)
+cols = st.columns(8)
 show_metric(cols[0], "Bitcoin", "BTC-USD", "Risk-on asset. Tracks NASDAQ in risk-off, acts as digital gold in inflation.")
 show_metric(cols[1], "Ethereum", "ETH-USD", "Tracks BTC but higher beta. Sensitive to DeFi and tech sentiment.")
 
 # --- CURRENCIES ---
 st.markdown("### Currencies")
-cols = st.columns(4)
+cols = st.columns(8)
 show_metric(cols[0], "EUR/USD", "EURUSD=X", "Euro vs Dollar. Falling = dollar strength / risk-off.")
 show_metric(cols[1], "USD/JPY", "JPY=X", "Dollar vs Yen. Rising = risk-on. Falling Yen = safe haven bid.")
 show_metric(cols[2], "GBP/USD", "GBPUSD=X", "Pound vs Dollar. Sensitive to UK macro and global risk appetite.")
