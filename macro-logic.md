@@ -26,23 +26,22 @@ you're seeing is real or mechanical."
 
 ## The Key Insight (from observation)
 
-Two completely different mechanics produce identical price action on a heat map:
+Two completely different mechanics produce identical price action on a heat map.
+
+The trigger is a counter-move day within a short-term (3-5 day) trend — e.g. a red day in a sector that has been trending up, or a green day in a sector trending down.
 
 ### Mechanical Rebalancing
-- Large funds maintain target allocations
-- Sector outperforms for 5-10 days → they are overweight → must sell to rebalance
-- Flow reverses within 1-2 days as rebalancing completes
+- Sector moves in one direction for 3-5 days → funds rebalance allocation → counter-move day
 - No macro catalyst overnight
+- Counter-move is noise within the existing trend
 - Response: FADE the move
 
-### Genuine Regime Shift
-- Macro context changed overnight
-- Capital exits structurally, not as maintenance
-- Flow sustained across multiple days
-- Related sectors move in correlated direction
+### Trend Reversal
+- Macro catalyst present overnight
+- Counter-move is the start of a new short-term direction
 - Response: FOLLOW the move
 
-The morning brief answers: which one is this?
+The morning brief answers: is today's counter-move a reversal or rebalancing?
 
 ---
 
@@ -51,7 +50,7 @@ The morning brief answers: which one is this?
 Everything reduces to these:
 
 1. Did macro context shift overnight? (yes/no + what changed)
-2. Is today's sector flow structural or mechanical? (per sector)
+2. Is today's counter-move a reversal or rebalancing? (per sector)
 3. Risk-on or risk-off today? (with confidence level)
 
 ---
@@ -136,6 +135,19 @@ FADE OR FOLLOW:
 
 WATCH TODAY:
   [1-3 specific variables that would change the posture]
+
+---
+
+## Classification Logic (skeleton)
+
+What feeds the rebalancing vs reversal call per sector:
+
+- Short-term trend direction (last 3-5 daily candles per sector ETF)
+- Counter-move detected today (yes/no)
+- Macro catalyst present overnight (yes/no — from news/FRED layer)
+- Volume on today's move vs 20-day average
+
+Decision rules TBD — this section to be expanded.
 
 ---
 
