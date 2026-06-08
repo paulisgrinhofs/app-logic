@@ -127,3 +127,15 @@ Automated MOO sell orders — submit market-on-open sell orders for everything b
 Premarket execution — automate premarket sell orders based on price thresholds
 Statistical filters — only fire when imbalance exceeds X standard deviations from normal, combined with volume and price conditions
 Position sizing logic — automatically size based on volatility, available capital, and historical reversal magnitude
+
+Most relevant to what you're building:
+
+1. Market Ontology — closest in spirit to your tool. Their AM Edition does exactly what you're designing: ranks overnight events by what actually moved prices, traces causal transmission (macro → rates → credit → FX → equities → sectors), and outputs a pre-market brief. Their logic of "event-to-asset mapping" and "causal transmission chains" is worth studying. You can't copy the code but the logic design is directly applicable.
+
+2. TradingView — Sector Rotation & Money Flow Dashboard — open Pine Script, tracks 39 sector ETFs, real-time money flow and momentum. The classification logic (which sectors are gaining vs losing flow) is visible in the code and directly relevant to your structural vs mechanical distinction.
+
+3. Macrosynergy — How to build a macro trading strategy (Python) — open source Python walkthrough of building macro-driven trading logic. Worth reading for the internal piping design.
+
+4. GitHub: tradermonty/claude-trading-skills — specifically has market environment analysis, sector rotation identification, and regime classification. Open source, Python, directly borrowable logic.
+
+5. SentimenTrader — their composite trend model scores sectors 0–10 based on momentum. Their confidence scoring approach is worth adapting for your High/Medium/Low confidence output.
