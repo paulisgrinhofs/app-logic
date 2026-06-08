@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import time
 
+st.set_page_config(layout="wide")
 st.title("Macro Dashboard")
 
 def fetch(ticker):
