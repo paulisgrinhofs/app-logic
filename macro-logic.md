@@ -63,9 +63,9 @@ Everything reduces to these:
 - S&P 500 futures (ES=F)
 - NASDAQ futures (NQ=F)
 - 10yr yield (^TNX)
-- 2yr yield — for spread vs 10yr
+- **[NEW]** 2yr yield — for spread vs 10yr
 - Dollar index (DX=F)
-- Oil WTI (CL=F)
+- **[NEW]** Oil WTI (CL=F)
 - Put/call ratio (^CPC)
 - All 11 GICS sector ETFs — pre-market move + volume vs 20-day avg
 
