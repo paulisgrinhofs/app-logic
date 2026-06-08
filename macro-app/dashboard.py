@@ -27,7 +27,7 @@ tickers = {
         "help": "2-year Treasury yield. Watch spread vs 10yr. 2yr > 10yr = inverted curve = recession signal."
     },
     "Dollar Index": {
-        "ticker": "DX=F",
+        "ticker": "DX-Y.NYB",
         "help": "USD strength. Rising = risk-off or strong US growth. Falling = risk-on, weak dollar benefits commodities and EM."
     },
     "Oil WTI": {
@@ -44,7 +44,9 @@ for name, info in tickers.items():
     try:
         data = yf.Ticker(info["ticker"])
         price = round(data.fast_info['last_price'], 2)
-        st.metric(label=name, value=price, help=info["help"])
+        prev_close = round(data.fast_info['previous_close'], 2)
+        delta = round(price - prev_close, 2)
+        st.metric(label=name, value=price, delta=delta, help=info["help"])
     except:
         st.metric(label=name, value="unavailable", help=info["help"])
 
