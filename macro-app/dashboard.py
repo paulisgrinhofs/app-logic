@@ -12,11 +12,11 @@ tickers = {
     },
     "S&P 500 Futures": {
         "ticker": "ES=F",
-        "help": "Pre-market S&P 500 direction. Positive = risk-on open expected."
+        "help": "S&P 500 futures contract (ES=F). Tracks the cash index closely but trades 24/7. More useful than cash index pre-market."
     },
     "NASDAQ Futures": {
         "ticker": "NQ=F",
-        "help": "Pre-market tech direction. Leads growth/risk sentiment."
+        "help": "NASDAQ 100 futures contract. Leads tech/growth sentiment pre-market."
     },
     "10yr Yield": {
         "ticker": "^TNX",
@@ -35,8 +35,8 @@ tickers = {
         "help": "West Texas crude price. Key driver for Energy sector. Also signals inflation expectations."
     },
     "Put/Call Ratio": {
-        "ticker": "^CPC",
-        "help": "Options sentiment. Below 0.7 = complacency. Above 1.0 = fear. Contrarian indicator at extremes."
+        "ticker": "^PCCE",
+        "help": "Equity put/call ratio. Below 0.7 = complacency. Above 1.0 = fear. Contrarian indicator at extremes."
     },
 }
 
@@ -46,7 +46,15 @@ for name, info in tickers.items():
         price = round(data.fast_info['last_price'], 2)
         prev_close = round(data.fast_info['previous_close'], 2)
         delta = round(price - prev_close, 2)
-        st.metric(label=name, value=price, delta=delta, help=info["help"])
+        pct = round((delta / prev_close) * 100, 2) if prev_close else None
+
+        # show % change for index futures
+        if info["ticker"] in ["ES=F", "NQ=F"]:
+            label = f"{name}  ({'+' if pct >= 0 else ''}{pct}%)"
+        else:
+            label = name
+
+        st.metric(label=label, value=price, delta=delta, help=info["help"])
     except:
         st.metric(label=name, value="unavailable", help=info["help"])
 
