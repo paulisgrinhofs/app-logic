@@ -33,15 +33,16 @@ def fetch(ticker):
         return None, None, None
 
 def fetch_put_call():
-    # Try to extract put/call sub-component from CNN F&G API
     try:
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
         r = requests.get("https://production.dataviz.cnn.io/index/fearandgreed/graphdata", timeout=5, headers=headers)
         data = r.json()
-        pc = data.get('fear_and_greed', {}).get('put_call_options', {})
-        score = pc.get('score')
-        if score is not None:
-            return round(float(score), 2)
+        # CNN exposes each F&G component at the top level of the response
+        for key in ['put_and_call_options', 'put_call_options']:
+            block = data.get(key, {})
+            score = block.get('score')
+            if score is not None:
+                return round(float(score), 2)
     except:
         pass
     return None
