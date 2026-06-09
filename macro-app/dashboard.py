@@ -143,10 +143,19 @@ show_metric(cols[2], "10yr Yield", "^TNX", "10-year Treasury spot yield. Rising 
 show_metric(cols[3], "30yr Yield", "^TYX", "30-year Treasury spot yield. Long-end rates. Sensitive to inflation expectations.")
 p10, _, _ = fetch("^TNX")
 p2, _, _ = fetch("^IRX")
+p10_prev = round(yf.Ticker("^TNX").fast_info['previous_close'], 2) if p10 else None
+p2_prev = round(yf.Ticker("^IRX").fast_info['previous_close'], 2) if p2 else None
 with cols[4]:
     if p10 and p2:
         spread = round(p10 - p2, 2)
-        st.metric(label="Spread (10-2yr)", value=spread, help="Positive = normal curve. Negative = inverted = recession warning.")
+        if p10_prev and p2_prev:
+            spread_prev = round(p10_prev - p2_prev, 2)
+            spread_delta = round(spread - spread_prev, 2)
+            spread_pct = round((spread_delta / abs(spread_prev)) * 100, 1) if spread_prev else None
+            delta_str = f"{'+' if spread_delta >= 0 else ''}{spread_delta} ({'+' if spread_pct >= 0 else ''}{spread_pct}%)" if spread_pct is not None else f"{'+' if spread_delta >= 0 else ''}{spread_delta}"
+            st.metric(label="Spread (10-2yr)", value=spread, delta=delta_str, help="10yr minus 2yr yield. Positive = normal curve. Negative = inverted = recession warning. Narrowing = curve flattening (tightening conditions). Widening = steepening (growth expectations rising or Fed cutting).")
+        else:
+            st.metric(label="Spread (10-2yr)", value=spread, help="10yr minus 2yr yield. Positive = normal curve. Negative = inverted = recession warning.")
     else:
         st.metric(label="Spread (10-2yr)", value="n/a")
 
