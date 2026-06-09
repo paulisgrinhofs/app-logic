@@ -103,10 +103,12 @@ def _prefetch_slow():
         if st.session_state.get(cache_key) and time.time() - st.session_state[cache_key]['ts'] < 120:
             return
         try:
-            data = yf.Ticker("ZQ=F")
-            price = round(data.fast_info['last_price'], 3)
-            prev = round(data.fast_info['previous_close'], 3)
-            st.session_state[cache_key] = {'price': price, 'prev': prev, 'ts': time.time()}
+            t = yf.Ticker("ZQ=F")
+            hist = t.history(period="5d")
+            if not hist.empty:
+                price = round(float(hist['Close'].iloc[-1]), 3)
+                prev = round(float(hist['Close'].iloc[-2]), 3) if len(hist) >= 2 else price
+                st.session_state[cache_key] = {'price': price, 'prev': prev, 'ts': time.time()}
         except:
             pass
 
