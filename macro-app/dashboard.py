@@ -32,6 +32,137 @@ def fetch(ticker):
     except:
         return None, None, None
 
+def fetch_ratio(t1, t2):
+    try:
+        d1 = yf.Ticker(t1).fast_info
+        d2 = yf.Ticker(t2).fast_info
+        price = round(d1['last_price'] / d2['last_price'], 4)
+        prev = round(d1['previous_close'] / d2['previous_close'], 4)
+        delta = round(price - prev, 4)
+        pct = round((delta / prev) * 100, 2) if prev else 0
+        return price, delta, pct
+    except:
+        return None, None, None
+
+def _parse_fred_csv(text):
+    obs = []
+    for line in text.replace('\r\n', '\n').replace('\r', '\n').split('\n'):
+        line = line.strip()
+        if not line or line.startswith('DATE'):
+            continue
+        parts = line.split(',')
+        if len(parts) >= 2 and parts[1].strip() not in ('', '.'):
+            try:
+                obs.append((parts[0].strip(), float(parts[1].strip())))
+            except ValueError:
+                continue
+    return obs
+
+FRED_API_KEY = "eb55d58a724483b7bc037fa215b29dbf"
+
+def _fetch_fred_raw(series_id):
+    try:
+        url = (f"https://api.stlouisfed.org/fred/series/observations"
+               f"?series_id={series_id}&api_key={FRED_API_KEY}&file_type=json&sort_order=asc")
+        r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+        if r.status_code == 200:
+            obs = [(o['date'], float(o['value']))
+                   for o in r.json().get('observations', [])
+                   if o['value'] not in ('.', '')]
+            return obs
+    except:
+        pass
+    return []
+
+def _prefetch_slow():
+    """Run slow fetches in parallel threads before page renders."""
+    def _fred(series_id, cache_key, mode):
+        if st.session_state.get(cache_key) and time.time() - st.session_state[cache_key]['ts'] < 3600:
+            return
+        obs = _fetch_fred_raw(series_id)
+        if not obs:
+            return
+        if mode == 'single':
+            st.session_state[cache_key] = {'value': str(obs[-1][1]), 'date': obs[-1][0], 'ts': time.time()}
+        elif mode == 'yoy' and len(obs) >= 13:
+            yoy = round(((obs[-1][1] - obs[-13][1]) / obs[-13][1]) * 100, 2)
+            st.session_state[cache_key] = {'value': obs[-1][1], 'yoy': yoy, 'date': obs[-1][0], 'ts': time.time()}
+        elif mode == 'mom' and len(obs) >= 2:
+            mom = round(obs[-1][1] - obs[-2][1], 1)
+            st.session_state[cache_key] = {'value': obs[-1][1], 'mom': mom, 'date': obs[-1][0], 'ts': time.time()}
+
+    def _zq():
+        cache_key = 'zq_cache'
+        if st.session_state.get(cache_key) and time.time() - st.session_state[cache_key]['ts'] < 120:
+            return
+        try:
+            data = yf.Ticker("ZQ=F")
+            price = round(data.fast_info['last_price'], 3)
+            prev = round(data.fast_info['previous_close'], 3)
+            st.session_state[cache_key] = {'price': price, 'prev': prev, 'ts': time.time()}
+        except:
+            pass
+
+    threads = [
+        threading.Thread(target=_fred, args=("ICSA", "fred_icsa", "single")),
+        threading.Thread(target=_fred, args=("CPIAUCSL", "fred_cpi", "yoy")),
+        threading.Thread(target=_fred, args=("PAYEMS", "fred_nfp", "mom")),
+        threading.Thread(target=_zq),
+    ]
+    for t in threads:
+        t.daemon = True
+        t.start()
+    for t in threads:
+        t.join(timeout=10)
+
+_prefetch_slow()
+
+def fetch_fred(series_id, cache_key):
+    cache = st.session_state.get(cache_key)
+    if cache and time.time() - cache['ts'] < 3600:
+        return cache['value'], cache['date'], None
+    obs = _fetch_fred_raw(series_id)
+    if obs:
+        value, date = str(obs[-1][1]), obs[-1][0]
+        st.session_state[cache_key] = {'value': value, 'date': date, 'ts': time.time()}
+        return value, date, None
+    return None, None, None
+
+def fetch_fred_yoy(series_id, cache_key):
+    cache = st.session_state.get(cache_key)
+    if cache and time.time() - cache['ts'] < 3600:
+        return cache['value'], cache['yoy'], cache['date']
+    obs = _fetch_fred_raw(series_id)
+    if len(obs) >= 13:
+        current_val, current_date = obs[-1][1], obs[-1][0]
+        yoy = round(((current_val - obs[-13][1]) / obs[-13][1]) * 100, 2)
+        st.session_state[cache_key] = {'value': current_val, 'yoy': yoy, 'date': current_date, 'ts': time.time()}
+        return current_val, yoy, current_date
+    return None, None, None
+
+def fetch_fred_mom(series_id, cache_key):
+    cache = st.session_state.get(cache_key)
+    if cache and time.time() - cache['ts'] < 3600:
+        return cache['value'], cache['mom'], cache['date']
+    obs = _fetch_fred_raw(series_id)
+    if len(obs) >= 2:
+        current_val, current_date = obs[-1][1], obs[-1][0]
+        mom = round(current_val - obs[-2][1], 1)
+        st.session_state[cache_key] = {'value': current_val, 'mom': mom, 'date': current_date, 'ts': time.time()}
+        return current_val, mom, current_date
+    return None, None, None
+
+RATING_SHORT = {
+    "Extreme Fear": "Ext Fear",
+    "Extreme Greed": "Ext Greed",
+    "Fear": "Fear",
+    "Greed": "Greed",
+    "Neutral": "Neutral",
+}
+
+def shorten_rating(rating):
+    return RATING_SHORT.get(rating, rating)
+
 def fetch_put_call():
     try:
         data = yf.Ticker("^PCCR").history(period="2d")
