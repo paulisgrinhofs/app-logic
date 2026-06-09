@@ -26,13 +26,12 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 |-------|--------------|------|-------|
 | VIX | ^VIX | Spot | Fear gauge. Spot used — VIX futures behave differently |
 | DXY | DX-Y.NYB | Spot/cash | Dollar index. `DX=F` futures preferred but not available on yfinance. Small discrepancy vs Finviz which uses `DX=F`. |
-| Put/Call (PCCR) | ^PCCR | yfinance | CBOE Total Put/Call Ratio. Uses `.history(period="2d")` — not `fast_info`. Above 1.0 = bearish hedging. Below 0.7 = complacency. |
-| F&G (Stocks) | feargreedchart.com | Composite | CNN stock market Fear & Greed 0-100. Requires User-Agent header to avoid 403. |
-| F&G (Crypto) | api.alternative.me/fng/ | Composite | **Crypto-specific** — tracks Bitcoin sentiment only, not equity markets. Shown for cross-asset context. |
+| Put/Call | CNN F&G API sub-component | Derived | Extracted from `fear_and_greed.put_call_options.score` in CNN endpoint. CNN normalises raw CBOE ratio. yfinance tickers (^PCCR, ^CPC, ^CPCE) all return empty — Yahoo strips specialist indices. |
+| F&G (Stocks) | production.dataviz.cnn.io | Composite | CNN stock market Fear & Greed 0-100. 7 inputs: momentum, price strength, breadth, put/call, junk bond demand, volatility, safe haven demand. Requires User-Agent header. |
 
-**Put/Call note:** `^PCCR` is the CBOE Total Put/Call Ratio. Direct scraping of CBOE was blocked (403). This ticker uses yfinance `.history()` which accesses Yahoo's cached data — may lag slightly.
+**F&G (Crypto)** moved to Crypto section — it is a separate index (alternative.me) tracking Bitcoin sentiment only. Inputs: volatility, momentum/volume, social media, dominance, trends. Should not be read alongside equity F&G.
 
-**Fear & Greed note:** CNN endpoint was returning errors without a browser User-Agent header. Added header to fix. Crypto F&G is a separate index (alternative.me) and should not be conflated with the stock market version.
+**Put/Call sourcing:** Direct CBOE scraping blocked (403). yfinance tickers for put/call return no data. CNN's own API sub-component is the only reliable free source — returns CNN's normalised version of the CBOE ratio.
 
 **Known discrepancy:** DXY shows slightly different value vs Finviz — Finviz uses `DX=F` futures, we use `DX-Y.NYB` spot.
 
@@ -90,10 +89,11 @@ All futures. Commodity futures show supply/demand structure and are the institut
 
 Spot prices. Price discovery on 24/7 spot exchanges, not CME futures.
 
-| Label | Ticker | Purpose |
-|-------|--------|---------|
+| Label | Ticker/Source | Purpose |
+|-------|--------------|---------|
 | Bitcoin | BTC-USD | Risk-on/off signal + digital gold proxy |
 | Ethereum | ETH-USD | Higher beta crypto, DeFi/tech sentiment |
+| F&G (Crypto) | api.alternative.me/fng/ | Crypto-only sentiment index. Inputs: volatility, momentum/volume, social media, dominance, Google trends. Placed here not in Risk Sentiment — it measures crypto market mood, not equity market mood. |
 
 ---
 
