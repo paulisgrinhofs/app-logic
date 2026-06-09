@@ -6,15 +6,21 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 
 ## Architecture
 
-`dashboard.py` is a single-page Streamlit app with 6 sections, each rendered as a horizontal row of fixed-width (160px) metric cards. Data fetched via `yfinance` and `requests`, refreshing every 30 seconds via `st.rerun()`.
+`dashboard.py` is a single-page Streamlit app with 9 sections, each rendered as a horizontal row of fixed-width (160px) metric cards. Data fetched via `yfinance`, `requests`, and FRED CSV API, refreshing every 30 seconds via `st.rerun()`.
 
 ### Key functions
-- `fetch(ticker)` — fetches last price, previous close, delta, % change via yfinance `fast_info`
-- `fetch_put_call()` — extracts Put/Call sub-component from CNN F&G API (`put_and_call_options.score`). No `previous_close` in the sub-component, so delta is tracked via `st.session_state['pc_prev']` — delta shows as n/a on first load, populates after first 30s refresh.
-- `fetch_fear_greed_cnn()` — fetches CNN stock Fear & Greed from `production.dataviz.cnn.io`. Returns score, rating, delta, pct. Delta computed from `fear_and_greed.previous_close` field in API response.
-- `fetch_fear_greed_crypto()` — fetches crypto Fear & Greed from `api.alternative.me/fng/?limit=2`. `limit=2` returns today + yesterday, delta computed from those two values.
-- `shorten_rating(rating)` — maps long ratings to display-safe versions: `"Extreme Fear"` → `"Ext Fear"`, `"Extreme Greed"` → `"Ext Greed"`. Prevents truncation in 160px columns where Streamlit's delta field adds an arrow icon.
-- `show_metric(col, label, ticker, help_text)` — renders metric card with delta, % change, tooltip
+
+| Function | Purpose |
+|----------|---------|
+| `fmt_delta(delta, pct)` | Shared delta string formatter. Handles None safely. Returns `+1.2 (+0.5%)` style string or just `+1.2` if pct unavailable. |
+| `fetch(ticker)` | yfinance `fast_info` — last price, previous close, delta, % change |
+| `fetch_ratio(t1, t2)` | Fetches ratio of two tickers (e.g. HYG/TLT, RSP/SPY) with delta vs previous close ratio |
+| `fetch_fred(series_id, cache_key)` | FRED CSV endpoint — returns (value, release_date, next_date). Cached in session_state for 1hr to avoid slow repeated calls. No API key required. |
+| `fetch_put_call()` | CNN F&G API `put_and_call_options.score`. No previous_close in sub-component — delta tracked via `session_state['pc_prev']`, n/a on first load. |
+| `fetch_fear_greed_cnn()` | CNN F&G composite score + rating + delta from `fear_and_greed.previous_close` |
+| `fetch_fear_greed_crypto()` | alternative.me crypto F&G, `?limit=2` for today + yesterday delta |
+| `shorten_rating(rating)` | Abbreviates long ratings (Extreme Fear → Ext Fear) to prevent truncation in 160px columns |
+| `show_metric(col, label, ticker, help_text)` | Standard metric card with delta, % change, tooltip |
 
 ---
 
@@ -26,11 +32,11 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 | Label | Ticker/Source | Type | Notes |
 |-------|--------------|------|-------|
 | VIX | ^VIX | Spot | Fear gauge. Spot used — VIX futures behave differently |
-| DXY | DX-Y.NYB | Spot/cash | Dollar index. `DX=F` futures preferred but not available on yfinance. Small discrepancy vs Finviz which uses `DX=F`. |
-| Put/Call | CNN F&G API — `put_and_call_options.score` | Derived | CNN-normalised CBOE ratio on 0-100 scale. Higher = more calls vs puts = bullish. Lower = more puts = bearish hedging. Delta tracked via session_state (n/a on first load). |
-| F&G Stocks | `production.dataviz.cnn.io/index/fearandgreed/graphdata` | Composite | CNN stock market Fear & Greed 0-100. Score as value, % change vs previous_close as delta. Rating shown abbreviated if delta unavailable. |
+| DXY | DX-Y.NYB | Spot/cash | Dollar index. `DX=F` futures preferred but unavailable on yfinance. Small discrepancy vs Finviz. |
+| Put/Call | CNN F&G API `put_and_call_options.score` | Derived | CNN-normalised CBOE ratio 0-100. Delta via session_state. |
+| F&G Stocks | production.dataviz.cnn.io | Composite | CNN equity Fear & Greed. Delta from `previous_close`. Rating abbreviated if delta unavailable. |
 
-**F&G Stocks — how to read:** Composite of 7 equal-weight sub-indicators:
+**F&G Stocks — 7 sub-indicators:**
 1. Market momentum (S&P vs 125-day MA)
 2. Stock price strength (52-week highs vs lows on NYSE)
 3. Stock price breadth (advancing vs declining volume)
@@ -39,37 +45,33 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 6. Market volatility (VIX vs 50-day MA)
 7. Safe haven demand (stock vs bond returns)
 
-Each sub-indicator scored 0-100 → averaged to composite. Score reflects crowd sentiment, not fundamentals. Use as contrarian signal at extremes (below 25 or above 75).
+Contrarian signal at extremes: below 25 = long-term value buyers historically step in. Above 75 = market most vulnerable to pullback.
 
-**F&G (Crypto)** moved to Crypto section — separate index (alternative.me) tracking Bitcoin market sentiment only. Not an equity signal.
-
-**Put/Call sourcing history:** CBOE direct scraping blocked (403). yfinance tickers ^PCCR, ^CPC, ^CPCE all return empty data. CNN F&G API `put_and_call_options` top-level key is the only working free source.
-
-**Known discrepancy:** DXY shows slightly different value vs Finviz — Finviz uses `DX=F` futures, we use `DX-Y.NYB` spot.
+**Put/Call sourcing history:** CBOE scraping blocked (403). yfinance tickers ^PCCR, ^CPC, ^CPCE all return empty. CNN F&G `put_and_call_options` top-level key is the only working free source.
 
 ---
 
 ### 2. Equity Futures & Indices
 **Logic ref:** `macro-logic.md` → Inputs → Price/Market
 
-US indices use futures (captures overnight macro risk). International indices use cash (futures not reliably available on yfinance).
+US indices use futures (24/7, captures overnight risk). International use cash (stale when markets closed).
 
-| Label | Ticker | Type | Notes |
-|-------|--------|------|-------|
-| S&P 500 | ES=F | Futures | US — primary equity risk indicator |
-| NASDAQ | NQ=F | Futures | US — leads tech/growth sentiment |
-| Nikkei | ^N225 | Cash index | Japan. Stale when market closed. |
-| EuroStoxx | ^STOXX50E | Cash index | Europe benchmark. Stale when market closed. |
-| DAX | ^GDAXI | Cash index | Germany — export/China proxy. Stale when market closed. |
-| KOSPI | ^KS11 | Cash index | South Korea. Stale when market closed. |
-| CSI 300 | 000300.SS | Cash index | China domestic economy. Stale when market closed. |
+| Label | Ticker | Type |
+|-------|--------|------|
+| S&P 500 | ES=F | Futures |
+| NASDAQ | NQ=F | Futures |
+| Nikkei | ^N225 | Cash |
+| EuroStoxx | ^STOXX50E | Cash |
+| DAX | ^GDAXI | Cash |
+| KOSPI | ^KS11 | Cash |
+| CSI 300 | 000300.SS | Cash |
 
 ---
 
 ### 3. Rates
 **Logic ref:** `macro-logic.md` → Inputs → Price/Market
 
-All spot yields. Futures not used — spot yields are the pure cost-of-capital baseline.
+All spot yields. Spread (10-2yr) is a calculated field — both yields fetched, previous closes fetched separately for spread delta.
 
 | Label | Ticker | Purpose |
 |-------|--------|---------|
@@ -77,51 +79,90 @@ All spot yields. Futures not used — spot yields are the pure cost-of-capital b
 | 5yr Yield | ^FVX | Mid-curve |
 | 10yr Yield | ^TNX | Global benchmark rate |
 | 30yr Yield | ^TYX | Long-end inflation expectations |
-| Spread (10-2yr) | calculated | Yield curve shape. Negative = inverted = recession signal |
+| Spread (10-2yr) | calculated | Negative = inverted = recession signal. Delta = narrowing (flattening) vs widening (steepening). |
 
 ---
 
-### 4. Commodity Futures
-**Logic ref:** `macro-logic.md` → Inputs → Price/Market
+### 4. Stress & Credit
+**Logic ref:** `macro-logic.md` → Classification Logic — macro catalyst present overnight
 
-All futures. Commodity futures show supply/demand structure and are the institutional benchmark.
+| Label | Ticker/Source | Notes |
+|-------|--------------|-------|
+| MOVE Index | ^MOVE | Bond market volatility. Leads equity vol — rising MOVE with flat VIX = hidden stress. Above 100 = elevated. |
+| HYG | HYG | High-yield corporate bond ETF. Falling = credit stress, risk-off. Leads equity selloffs. |
+| JNK | JNK | Second high-yield read. Divergence from HYG is rare but significant. |
+| HYG/TLT | fetch_ratio("HYG","TLT") | Calculated ratio. Falling = flight from credit to safe haven. More sensitive than raw HYG price. |
+| TLT | TLT | 20yr+ Treasury ETF. Rising = safety bid / rates falling. |
+
+**Why this row matters:** Bond and credit markets price risk before equities. MOVE and HYG/TLT divergences from equity indices are early warning signals for the rebalancing vs reversal classification.
+
+---
+
+### 5. Breadth
+**Logic ref:** `macro-logic.md` → Classification Logic — is today's move structural or narrow?
+
+| Label | Ticker/Source | Notes |
+|-------|--------------|-------|
+| RSP | RSP | Equal-weight S&P 500 ETF |
+| SPY | SPY | Market-cap weighted S&P 500 ETF |
+| RSP/SPY | fetch_ratio("RSP","SPY") | Breadth indicator. Rising = broad participation. Falling = mega-cap driven, fragile rally. |
+
+**How to read RSP/SPY:** If SPY is up but RSP/SPY is falling, the index gain is driven by a handful of large-cap names. The underlying market is weakening. Used as a structural confirmation input for sector flow analysis later.
+
+---
+
+### 6. Macro Data
+**Logic ref:** `macro-logic.md` → Inputs → Macro Data (FRED API)
+
+All FRED data uses the free CSV endpoint (`fred.stlouisfed.org/graph/fredgraph.csv?id=SERIES`). No API key required. Cached in session_state for 1 hour.
+
+| Label | FRED Series | Frequency | Notes |
+|-------|------------|-----------|-------|
+| Fed Funds Implied | ZQ=F (yfinance) | Live | 30-day Fed Funds futures. Rate = 100 minus price. Overnight shift = market repricing cut/hike expectations. |
+| Jobless Claims | ICSA | Weekly (Thursdays) | Initial claims. Rising = labor weakening. Above 300k = concern. Leading indicator before monthly NFP. |
+| CPI | CPIAUCSL | Monthly | Index level shown. Watch direction of change. |
+| NFP | PAYEMS | Monthly (first Friday) | Total nonfarm payroll employment in thousands. |
+
+**Display:** Value shown as main metric. Release date shown as delta label (grey, `delta_color="off"`). Future build: add next release date when FRED release calendar API is integrated.
+
+---
+
+### 7. Commodity Futures
 
 | Label | Ticker | Purpose |
 |-------|--------|---------|
-| WTI Crude | CL=F | US oil benchmark. Energy sector driver + inflation signal |
-| Brent Crude | BZ=F | Global oil benchmark |
+| WTI Crude | CL=F | US oil benchmark + inflation signal |
+| Brent Crude | BZ=F | Global benchmark |
 | Gold | GC=F | Safe haven / inflation hedge / dollar inverse |
 | Silver | SI=F | Industrial + safe haven hybrid |
 | Copper | HG=F | Global growth leading indicator |
 
 ---
 
-### 5. Crypto
-**Logic ref:** `macro-logic.md` → Inputs → Price/Market
-
-Spot prices. Price discovery on 24/7 spot exchanges, not CME futures.
+### 8. Crypto
 
 | Label | Ticker/Source | Purpose |
 |-------|--------------|---------|
 | Bitcoin | BTC-USD | Risk-on/off signal + digital gold proxy |
-| Ethereum | ETH-USD | Higher beta crypto, DeFi/tech sentiment |
-| F&G Crypto | api.alternative.me/fng/?limit=2 | Crypto-only sentiment index. Score + % change vs yesterday. Inputs: volatility (25%), momentum/volume (25%), social media (15%), Bitcoin dominance (10%), Google Trends (10%). Placed here not in Risk Sentiment — measures crypto mood, not equity mood. Below 10 = capitulation. Above 80 = overheated. |
+| Ethereum | ETH-USD | Higher beta, DeFi/tech sentiment |
+| F&G Crypto | api.alternative.me/fng/?limit=2 | Crypto sentiment only. Delta vs yesterday. Below 10 = capitulation. Above 80 = overheated. |
 
 ---
 
-### 6. Currencies
-**Logic ref:** `macro-logic.md` → Inputs → Price/Market
+### 9. Currencies
 
 | Label | Ticker | Purpose |
 |-------|--------|---------|
 | EUR/USD | EURUSD=X | Euro strength vs dollar |
-| USD/JPY | JPY=X | Yen as safe haven indicator |
+| USD/JPY | JPY=X | Yen safe haven indicator |
 | GBP/USD | GBPUSD=X | UK macro proxy |
-| USD/CNY | USDCNY=X | Yuan strength — China stress indicator |
+| USD/CNY | USDCNY=X | Yuan strength — China stress |
 
 ---
 
 ## Open Items
 - DXY: using spot `DX-Y.NYB` — small discrepancy vs Finviz (`DX=F`). Fix when alternative source found.
-- International equity indices: cash prices, stale when markets closed
-- Refresh rate: 30 seconds
+- International equity indices: cash prices go stale when markets are closed.
+- FRED next release dates: `fetch_fred()` has placeholder for next_date — requires FRED API key for release calendar endpoint. Add when key available.
+- Sector ETF flow row: planned next build. Will need `fetch_with_volume()` for price + volume vs 20-day avg.
+- Events calendar: planned future build. Will consume `release_date` and `next_date` fields already structured in `fetch_fred()`.

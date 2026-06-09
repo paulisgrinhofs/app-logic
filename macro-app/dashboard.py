@@ -21,6 +21,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def fmt_delta(delta, pct):
+    if delta is None:
+        return None
+    if pct is not None:
+        return f"{'+' if delta >= 0 else ''}{delta} ({'+' if pct >= 0 else ''}{pct}%)"
+    return f"{'+' if delta >= 0 else ''}{delta}"
+
 def fetch(ticker):
     try:
         data = yf.Ticker(ticker)
@@ -29,6 +36,38 @@ def fetch(ticker):
         delta = round(price - prev, 2)
         pct = round((delta / prev) * 100, 2) if prev else 0
         return price, delta, pct
+    except:
+        return None, None, None
+
+def fetch_ratio(t1, t2):
+    """Fetch price ratio of two tickers with delta vs previous close."""
+    try:
+        d1 = yf.Ticker(t1).fast_info
+        d2 = yf.Ticker(t2).fast_info
+        price = round(d1['last_price'] / d2['last_price'], 4)
+        prev = round(d1['previous_close'] / d2['previous_close'], 4)
+        delta = round(price - prev, 4)
+        pct = round((delta / prev) * 100, 2) if prev else 0
+        return price, delta, pct
+    except:
+        return None, None, None
+
+def fetch_fred(series_id, cache_key):
+    """Fetch latest value + release date from FRED. Caches in session_state for 1hr."""
+    cache = st.session_state.get(cache_key)
+    if cache and time.time() - cache['ts'] < 3600:
+        return cache['value'], cache['date'], cache['next_date']
+    try:
+        url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+        r = requests.get(url, timeout=8)
+        lines = r.text.strip().split('\n')
+        last = lines[-1].split(',')
+        value, date = last[1].strip(), last[0].strip()
+        # Fetch release calendar for next release date
+        next_date = None
+        cal_url = f"https://api.stlouisfed.org/fred/release/dates?series_id={series_id}&realtime_start=2020-01-01&api_key=&file_type=json"
+        st.session_state[cache_key] = {'value': value, 'date': date, 'next_date': next_date, 'ts': time.time()}
+        return value, date, next_date
     except:
         return None, None, None
 
@@ -53,11 +92,10 @@ def fetch_put_call():
             score = block.get('score')
             if score is not None:
                 score = round(float(score), 1)
-                # No previous_close in sub-component — use session_state to track change
                 prev = st.session_state.get('pc_prev')
                 st.session_state['pc_prev'] = score
                 delta = round(score - prev, 1) if prev is not None else None
-                pct = round((delta / prev) * 100, 1) if delta and prev else None
+                pct = round((delta / prev) * 100, 1) if (delta is not None and prev) else None
                 return score, delta, pct
     except:
         pass
@@ -66,15 +104,14 @@ def fetch_put_call():
 def fetch_fear_greed_cnn():
     try:
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-        url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
-        r = requests.get(url, timeout=5, headers=headers)
+        r = requests.get("https://production.dataviz.cnn.io/index/fearandgreed/graphdata", timeout=5, headers=headers)
         data = r.json()
         fg = data['fear_and_greed']
         score = round(fg['score'], 1)
         rating = fg['rating'].replace("_", " ").title()
         prev = fg.get('previous_close')
         delta = round(score - float(prev), 1) if prev is not None else None
-        pct = round((delta / float(prev)) * 100, 1) if delta and prev else None
+        pct = round((delta / float(prev)) * 100, 1) if (delta is not None and prev) else None
         return score, rating, delta, pct
     except:
         return None, None, None, None
@@ -87,7 +124,7 @@ def fetch_fear_greed_crypto():
         rating = data['data'][0]['value_classification']
         prev = int(data['data'][1]['value']) if len(data['data']) > 1 else None
         delta = round(score - prev, 1) if prev is not None else None
-        pct = round((delta / prev) * 100, 1) if delta and prev else None
+        pct = round((delta / prev) * 100, 1) if (delta is not None and prev) else None
         return score, rating, delta, pct
     except:
         return None, None, None, None
@@ -98,8 +135,7 @@ def show_metric(col, label, ticker, help_text):
         if price is None:
             st.metric(label=label, value="n/a", help=help_text)
         else:
-            delta_str = f"{'+' if delta >= 0 else ''}{delta} ({'+' if pct >= 0 else ''}{pct}%)"
-            st.metric(label=label, value=price, delta=delta_str, help=help_text)
+            st.metric(label=label, value=price, delta=fmt_delta(delta, pct), help=help_text)
 
 # --- RISK SENTIMENT ---
 st.markdown("### Risk Sentiment")
@@ -110,16 +146,15 @@ show_metric(cols[1], "DXY", "DX-Y.NYB", "USD index (spot). Rising = risk-off or 
 pc, pc_delta, pc_pct = fetch_put_call()
 with cols[2]:
     if pc is not None:
-        pc_delta_str = f"{'+' if pc_delta >= 0 else ''}{pc_delta} ({'+' if pc_pct >= 0 else ''}{pc_pct}%)" if (pc_delta is not None and pc_pct is not None) else (f"{'+' if pc_delta >= 0 else ''}{pc_delta}" if pc_delta is not None else None)
-        st.metric(label="Put/Call", value=pc, delta=pc_delta_str, help="CNN-normalised Put/Call ratio (0-100 scale). Source: CBOE options data via CNN F&G API. Higher = more calls vs puts = bullish. Lower = more puts vs calls = bearish hedging. Contrarian: extremes often mark turning points. Change = vs previous close.")
+        st.metric(label="Put/Call", value=pc, delta=fmt_delta(pc_delta, pc_pct), help="CNN-normalised Put/Call ratio (0-100 scale). Source: CBOE options data via CNN F&G API. Higher = more calls vs puts = bullish. Lower = more puts vs calls = bearish hedging. Contrarian: extremes often mark turning points. Change = vs previous close.")
     else:
         st.metric(label="Put/Call", value="n/a", help="Put/Call Ratio — sourced from CNN F&G API sub-components.")
 
 cnn_score, cnn_rating, cnn_delta, cnn_pct = fetch_fear_greed_cnn()
 with cols[3]:
     if cnn_score:
-        cnn_delta_str = f"{'+' if cnn_delta >= 0 else ''}{cnn_delta} ({'+' if cnn_pct >= 0 else ''}{cnn_pct}%)" if (cnn_delta is not None and cnn_pct is not None) else shorten_rating(cnn_rating)
-        st.metric(label=f"F&G Stocks", value=cnn_score, delta=cnn_delta_str, help="CNN Fear & Greed Index (equity markets). Composite of 7 inputs: market momentum, stock price strength, breadth, put/call options, junk bond demand, market volatility, safe haven demand. 0-25 = Extreme Fear. 25-45 = Fear. 45-55 = Neutral. 55-75 = Greed. 75-100 = Extreme Greed. Historically below 25 = long-term value buyers step in. Above 75 = market most vulnerable to pullback. Change = vs previous close.")
+        cnn_delta_str = fmt_delta(cnn_delta, cnn_pct) if cnn_delta is not None else shorten_rating(cnn_rating)
+        st.metric(label="F&G Stocks", value=cnn_score, delta=cnn_delta_str, help="CNN Fear & Greed Index (equity markets). Composite of 7 inputs: market momentum, stock price strength, breadth, put/call options, junk bond demand, market volatility, safe haven demand. 0-25 = Extreme Fear. 25-45 = Fear. 45-55 = Neutral. 55-75 = Greed. 75-100 = Extreme Greed. Historically below 25 = long-term value buyers step in. Above 75 = market most vulnerable to pullback. Change = vs previous close.")
     else:
         st.metric(label="F&G Stocks", value="n/a", help="CNN Fear & Greed Index for equity markets.")
 
@@ -152,12 +187,77 @@ with cols[4]:
             spread_prev = round(p10_prev - p2_prev, 2)
             spread_delta = round(spread - spread_prev, 2)
             spread_pct = round((spread_delta / abs(spread_prev)) * 100, 1) if spread_prev else None
-            delta_str = f"{'+' if spread_delta >= 0 else ''}{spread_delta} ({'+' if spread_pct >= 0 else ''}{spread_pct}%)" if spread_pct is not None else f"{'+' if spread_delta >= 0 else ''}{spread_delta}"
-            st.metric(label="Spread (10-2yr)", value=spread, delta=delta_str, help="10yr minus 2yr yield. Positive = normal curve. Negative = inverted = recession warning. Narrowing = curve flattening (tightening conditions). Widening = steepening (growth expectations rising or Fed cutting).")
+            st.metric(label="Spread (10-2yr)", value=spread, delta=fmt_delta(spread_delta, spread_pct), help="10yr minus 2yr yield. Positive = normal curve. Negative = inverted = recession warning. Narrowing = curve flattening (tightening conditions). Widening = steepening (growth expectations rising or Fed cutting).")
         else:
             st.metric(label="Spread (10-2yr)", value=spread, help="10yr minus 2yr yield. Positive = normal curve. Negative = inverted = recession warning.")
     else:
         st.metric(label="Spread (10-2yr)", value="n/a")
+
+# --- STRESS & CREDIT ---
+st.markdown("### Stress & Credit")
+cols = st.columns(8)
+show_metric(cols[0], "MOVE Index", "^MOVE", "Bond market volatility index (Treasury VIX equivalent). Rising MOVE while VIX is flat = bond market pricing stress equities haven't priced yet. Above 100 = elevated. Above 150 = acute stress.")
+show_metric(cols[1], "HYG", "HYG", "High-yield corporate bond ETF. Falling price = credit stress, risk-off, default risk rising. Leads equity selloffs.")
+show_metric(cols[2], "JNK", "JNK", "High-yield bond ETF (similar to HYG). Second read on credit risk. Divergence between HYG and JNK is rare but significant.")
+hyg_tlt, hyg_tlt_delta, hyg_tlt_pct = fetch_ratio("HYG", "TLT")
+with cols[3]:
+    if hyg_tlt is not None:
+        st.metric(label="HYG/TLT", value=hyg_tlt, delta=fmt_delta(hyg_tlt_delta, hyg_tlt_pct), help="Ratio of high-yield bonds (HYG) to long-term Treasuries (TLT). Falling = investors fleeing credit risk into safe government bonds = systemic stress. Rising = risk appetite returning. More sensitive to credit stress than raw HYG price.")
+    else:
+        st.metric(label="HYG/TLT", value="n/a", help="HYG/TLT ratio — credit vs safe haven demand.")
+show_metric(cols[4], "TLT", "TLT", "20yr+ Treasury bond ETF. Rising = safety bid / rates falling. Falling = rates rising or inflation fears.")
+
+# --- BREADTH ---
+st.markdown("### Breadth")
+cols = st.columns(8)
+show_metric(cols[0], "RSP", "RSP", "Equal-weight S&P 500 ETF. Each stock has same weight regardless of market cap.")
+show_metric(cols[1], "SPY", "SPY", "Market-cap weighted S&P 500 ETF. Dominated by mega-cap tech.")
+rsp_spy, rsp_spy_delta, rsp_spy_pct = fetch_ratio("RSP", "SPY")
+with cols[2]:
+    if rsp_spy is not None:
+        st.metric(label="RSP/SPY", value=rsp_spy, delta=fmt_delta(rsp_spy_delta, rsp_spy_pct), help="Breadth indicator. Rising = broad market participation, healthy rally. Falling = rally driven by few mega-caps only, narrow and fragile. If SPY is up but RSP/SPY is falling, the index gain is not broad-based.")
+    else:
+        st.metric(label="RSP/SPY", value="n/a", help="RSP/SPY breadth ratio.")
+
+# --- MACRO DATA ---
+st.markdown("### Macro Data")
+cols = st.columns(8)
+
+# Fed Funds implied rate from ZQ=F (30-day Fed Funds futures: implied rate = 100 - price)
+zq_price, zq_delta, zq_pct = fetch("ZQ=F")
+with cols[0]:
+    if zq_price is not None:
+        implied_rate = round(100 - zq_price, 3)
+        implied_prev = round(100 - (zq_price - zq_delta), 3) if zq_delta is not None else None
+        rate_delta = round(implied_rate - implied_prev, 3) if implied_prev is not None else None
+        rate_pct = round((rate_delta / implied_prev) * 100, 2) if (rate_delta and implied_prev) else None
+        st.metric(label="Fed Funds Implied", value=f"{implied_rate}%", delta=fmt_delta(rate_delta, rate_pct), help="Market-implied Fed Funds rate from ZQ=F (30-day futures). Formula: 100 minus futures price. Shows where the market expects the Fed rate to be — shifts overnight = market repricing rate cut/hike expectations.")
+    else:
+        st.metric(label="Fed Funds Implied", value="n/a", help="Implied Fed Funds rate from ZQ=F futures.")
+
+# Jobless Claims — FRED series ICSA (weekly, Thursdays)
+claims_val, claims_date, _ = fetch_fred("ICSA", "fred_icsa")
+with cols[1]:
+    if claims_val:
+        st.metric(label="Jobless Claims", value=f"{int(float(claims_val)):,}", delta=claims_date, delta_color="off", help=f"Weekly initial jobless claims (FRED: ICSA). Released every Thursday. Rising = labor market weakening. Above 300k = concern. Last release: {claims_date}. Leading indicator — moves before monthly NFP.")
+    else:
+        st.metric(label="Jobless Claims", value="n/a", help="Weekly initial jobless claims from FRED.")
+
+# CPI — FRED series CPIAUCSL (monthly)
+cpi_val, cpi_date, _ = fetch_fred("CPIAUCSL", "fred_cpi")
+with cols[2]:
+    if cpi_val:
+        st.metric(label="CPI", value=cpi_val, delta=cpi_date, delta_color="off", help=f"Consumer Price Index, all urban consumers (FRED: CPIAUCSL). Monthly release. Index level — check delta for month-on-month change direction. Last release: {cpi_date}.")
+    else:
+        st.metric(label="CPI", value="n/a", help="CPI from FRED.")
+
+# NFP — FRED series PAYEMS (monthly, first Friday)
+nfp_val, nfp_date, _ = fetch_fred("PAYEMS", "fred_nfp")
+with cols[3]:
+    if nfp_val:
+        st.metric(label="NFP (000s)", value=f"{int(float(nfp_val)):,}", delta=nfp_date, delta_color="off", help=f"Non-Farm Payrolls total employment level (FRED: PAYEMS, thousands). Released first Friday of each month. Last release: {nfp_date}. Rising = labor market strong. Watch month-on-month change, not absolute level.")
+    else:
+        st.metric(label="NFP (000s)", value="n/a", help="Non-Farm Payrolls from FRED.")
 
 # --- COMMODITY FUTURES ---
 st.markdown("### Commodity Futures")
@@ -176,7 +276,7 @@ show_metric(cols[1], "Ethereum", "ETH-USD", "Spot ETH. Tracks BTC but higher bet
 crypto_score, crypto_rating, crypto_delta, crypto_pct = fetch_fear_greed_crypto()
 with cols[2]:
     if crypto_score is not None:
-        crypto_delta_str = f"{'+' if crypto_delta >= 0 else ''}{crypto_delta} ({'+' if crypto_pct >= 0 else ''}{crypto_pct}%)" if (crypto_delta is not None and crypto_pct is not None) else shorten_rating(crypto_rating)
+        crypto_delta_str = fmt_delta(crypto_delta, crypto_pct) if crypto_delta is not None else shorten_rating(crypto_rating)
         st.metric(label="F&G Crypto", value=crypto_score, delta=crypto_delta_str, help="Alternative.me Crypto Fear & Greed Index. Tracks Bitcoin/crypto sentiment only — not equity markets. Inputs: volatility (25%), market momentum/volume (25%), social media (15%), Bitcoin dominance (10%), Google Trends (10%). 0-25 = Extreme Fear. 25-50 = Fear. 50-75 = Greed. 75-100 = Extreme Greed. Historically below 10 = capitulation zone, strong long-term entry signal. Above 80 = overheated, historically precedes corrections.")
     else:
         st.metric(label="F&G Crypto", value="n/a", help="Alternative.me Crypto Fear & Greed Index.")
