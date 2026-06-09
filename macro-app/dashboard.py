@@ -51,11 +51,13 @@ def fetch_put_call():
         for key in ['put_and_call_options', 'put_call_options']:
             block = data.get(key, {})
             score = block.get('score')
-            prev = block.get('previous_close')
             if score is not None:
                 score = round(float(score), 1)
-                delta = round(score - float(prev), 1) if prev is not None else None
-                pct = round((delta / float(prev)) * 100, 1) if delta and prev else None
+                # No previous_close in sub-component — use session_state to track change
+                prev = st.session_state.get('pc_prev')
+                st.session_state['pc_prev'] = score
+                delta = round(score - prev, 1) if prev is not None else None
+                pct = round((delta / prev) * 100, 1) if delta and prev else None
                 return score, delta, pct
     except:
         pass
