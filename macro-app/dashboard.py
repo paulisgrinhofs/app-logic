@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import requests
 import time
+import threading
 
 st.set_page_config(layout="wide")
 st.title("Macro Dashboard")
