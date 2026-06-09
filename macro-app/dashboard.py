@@ -52,6 +52,21 @@ def fetch_ratio(t1, t2):
     except:
         return None, None, None
 
+def _parse_fred_csv(text):
+    """Parse FRED CSV response into list of (date, float) obs, newest last."""
+    obs = []
+    for line in text.replace('\r\n', '\n').replace('\r', '\n').split('\n'):
+        line = line.strip()
+        if not line or line.startswith('DATE'):
+            continue
+        parts = line.split(',')
+        if len(parts) >= 2 and parts[1].strip() not in ('', '.'):
+            try:
+                obs.append((parts[0].strip(), float(parts[1].strip())))
+            except ValueError:
+                continue
+    return obs
+
 def fetch_fred(series_id, cache_key):
     """Fetch latest value + release date from FRED. Caches in session_state for 1hr."""
     cache = st.session_state.get(cache_key)
@@ -60,39 +75,49 @@ def fetch_fred(series_id, cache_key):
     try:
         url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
         r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-        lines = [l for l in r.text.strip().split('\n') if l and not l.startswith('DATE')]
-        for line in reversed(lines):
-            parts = line.split(',')
-            if len(parts) >= 2 and parts[1].strip() not in ('', '.'):
-                value, date = parts[1].strip(), parts[0].strip()
-                next_date = None
-                st.session_state[cache_key] = {'value': value, 'date': date, 'next_date': next_date, 'ts': time.time()}
-                return value, date, next_date
+        obs = _parse_fred_csv(r.text)
+        if obs:
+            value, date = str(obs[-1][1]), obs[-1][0]
+            st.session_state[cache_key] = {'value': value, 'date': date, 'next_date': None, 'ts': time.time()}
+            return value, date, None
     except:
         pass
     return None, None, None
 
 def fetch_fred_yoy(series_id, cache_key):
-    """Fetch latest value + YoY % change from FRED. Returns (value, yoy_pct, date). Caches 1hr."""
+    """Fetch YoY % change from FRED (current vs 12 months prior). Caches 1hr."""
     cache = st.session_state.get(cache_key)
     if cache and time.time() - cache['ts'] < 3600:
         return cache['value'], cache['yoy'], cache['date']
     try:
         url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
         r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-        lines = [l for l in r.text.strip().split('\n') if l and not l.startswith('DATE')]
-        obs = []
-        for line in lines:
-            parts = line.split(',')
-            if len(parts) >= 2 and parts[1].strip() not in ('', '.'):
-                obs.append((parts[0].strip(), float(parts[1].strip())))
-        if len(obs) < 13:
-            return None, None, None
-        current_val, current_date = obs[-1][1], obs[-1][0]
-        year_ago_val = obs[-13][1]
-        yoy = round(((current_val - year_ago_val) / year_ago_val) * 100, 2)
-        st.session_state[cache_key] = {'value': current_val, 'yoy': yoy, 'date': current_date, 'ts': time.time()}
-        return current_val, yoy, current_date
+        obs = _parse_fred_csv(r.text)
+        if len(obs) >= 13:
+            current_val, current_date = obs[-1][1], obs[-1][0]
+            year_ago_val = obs[-13][1]
+            yoy = round(((current_val - year_ago_val) / year_ago_val) * 100, 2)
+            st.session_state[cache_key] = {'value': current_val, 'yoy': yoy, 'date': current_date, 'ts': time.time()}
+            return current_val, yoy, current_date
+    except:
+        pass
+    return None, None, None
+
+def fetch_fred_mom(series_id, cache_key):
+    """Fetch month-on-month change from FRED (current minus previous obs). Caches 1hr."""
+    cache = st.session_state.get(cache_key)
+    if cache and time.time() - cache['ts'] < 3600:
+        return cache['value'], cache['mom'], cache['date']
+    try:
+        url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+        r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        obs = _parse_fred_csv(r.text)
+        if len(obs) >= 2:
+            current_val, current_date = obs[-1][1], obs[-1][0]
+            prev_val = obs[-2][1]
+            mom = round(current_val - prev_val, 1)
+            st.session_state[cache_key] = {'value': current_val, 'mom': mom, 'date': current_date, 'ts': time.time()}
+            return current_val, mom, current_date
     except:
         pass
     return None, None, None
@@ -308,17 +333,17 @@ with cols[2]:
     else:
         st.metric(label="CPI YoY", value="n/a", help="CPI YoY % change from FRED (CPIAUCSL).")
 
-# NFP — FRED series PAYEMS (monthly, first Friday)
-nfp_val, nfp_date, _ = fetch_fred("PAYEMS", "fred_nfp")
+# NFP MoM — FRED series PAYEMS (monthly, first Friday)
+nfp_val, nfp_mom, nfp_date = fetch_fred_mom("PAYEMS", "fred_nfp")
 with cols[3]:
-    if nfp_val:
-        st.metric(label="NFP (000s)", value=f"{int(float(nfp_val)):,}", delta=nfp_date, delta_color="off",
-            help=f"Non-Farm Payrolls total employment (FRED: PAYEMS, thousands). Released first Friday each month. "
-                 f"This is the cumulative level — watch month-on-month change for signal. "
-                 f"Strong monthly add: >250k. Healthy: 150–250k. Weak: 50–150k. Stalling: <50k. Recession: negative. "
-                 f"(2020 COVID loss: -20M in 2 months. 2022–23 avg: ~250k/month). Last release: {nfp_date}.")
+    if nfp_mom is not None:
+        mom_str = f"{'+' if nfp_mom >= 0 else ''}{int(nfp_mom):,}k"
+        st.metric(label="NFP MoM", value=mom_str, delta=nfp_date, delta_color="off",
+            help=f"Non-Farm Payrolls month-on-month change (FRED: PAYEMS, thousands). Released first Friday each month. "
+                 f"Strong: >+250k. Healthy: +150–250k. Weak: +50–150k. Stalling: <+50k. Recession: negative. "
+                 f"(2020 COVID: -20M in 2 months. 2022–23 avg: ~+250k/month). Last release: {nfp_date}.")
     else:
-        st.metric(label="NFP (000s)", value="n/a", help="Non-Farm Payrolls from FRED (PAYEMS).")
+        st.metric(label="NFP MoM", value="n/a", help="Non-Farm Payrolls MoM change from FRED (PAYEMS).")
 
 # --- COMMODITY FUTURES ---
 st.markdown("### Commodity Futures")
