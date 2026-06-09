@@ -98,24 +98,10 @@ def _prefetch_slow():
             mom = round(obs[-1][1] - obs[-2][1], 1)
             st.session_state[cache_key] = {'value': obs[-1][1], 'mom': mom, 'date': obs[-1][0], 'ts': time.time()}
 
-    def _zq():
-        cache_key = 'zq_cache'
-        if st.session_state.get(cache_key) and time.time() - st.session_state[cache_key]['ts'] < 120:
-            return
-        try:
-            fi = yf.Ticker("ZQ=F").fast_info
-            price = fi['last_price']
-            prev = fi['previous_close']
-            if price is not None and prev is not None:
-                st.session_state[cache_key] = {'price': round(float(price), 3), 'prev': round(float(prev), 3), 'ts': time.time()}
-        except:
-            pass
-
     threads = [
         threading.Thread(target=_fred, args=("ICSA", "fred_icsa", "single")),
         threading.Thread(target=_fred, args=("CPIAUCSL", "fred_cpi", "yoy")),
         threading.Thread(target=_fred, args=("PAYEMS", "fred_nfp", "mom")),
-        threading.Thread(target=_zq),
     ]
     for t in threads:
         t.daemon = True
@@ -332,10 +318,17 @@ with cols[2]:
 st.markdown("### Macro Data")
 cols = st.columns(8)
 
-# Fed Funds implied rate — read from prefetch cache
-zq_cache = st.session_state.get('zq_cache', {})
-zq_price = zq_cache.get('price')
-zq_prev = zq_cache.get('prev')
+# Fed Funds implied rate — ZQ=F fetched inline (fast_info, ~0.3s)
+zq_price, zq_prev = None, None
+try:
+    fi = yf.Ticker("ZQ=F").fast_info
+    p = fi['last_price']
+    pv = fi['previous_close']
+    if p is not None and pv is not None:
+        zq_price = round(float(p), 3)
+        zq_prev = round(float(pv), 3)
+except:
+    pass
 with cols[0]:
     if zq_price is not None:
         implied_rate = round(100 - zq_price, 3)
