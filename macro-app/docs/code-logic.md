@@ -10,9 +10,10 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 
 ### Key functions
 - `fetch(ticker)` — fetches last price, previous close, delta, % change via yfinance `fast_info`
-- `fetch_put_call()` — extracts Put/Call sub-component from CNN F&G API (`put_and_call_options.score`)
-- `fetch_fear_greed_cnn()` — fetches CNN stock Fear & Greed from `production.dataviz.cnn.io` with User-Agent header
-- `fetch_fear_greed_crypto()` — fetches crypto Fear & Greed from `api.alternative.me/fng/`
+- `fetch_put_call()` — extracts Put/Call sub-component from CNN F&G API (`put_and_call_options.score`). No `previous_close` in the sub-component, so delta is tracked via `st.session_state['pc_prev']` — delta shows as n/a on first load, populates after first 30s refresh.
+- `fetch_fear_greed_cnn()` — fetches CNN stock Fear & Greed from `production.dataviz.cnn.io`. Returns score, rating, delta, pct. Delta computed from `fear_and_greed.previous_close` field in API response.
+- `fetch_fear_greed_crypto()` — fetches crypto Fear & Greed from `api.alternative.me/fng/?limit=2`. `limit=2` returns today + yesterday, delta computed from those two values.
+- `shorten_rating(rating)` — maps long ratings to display-safe versions: `"Extreme Fear"` → `"Ext Fear"`, `"Extreme Greed"` → `"Ext Greed"`. Prevents truncation in 160px columns where Streamlit's delta field adds an arrow icon.
 - `show_metric(col, label, ticker, help_text)` — renders metric card with delta, % change, tooltip
 
 ---
@@ -26,8 +27,8 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 |-------|--------------|------|-------|
 | VIX | ^VIX | Spot | Fear gauge. Spot used — VIX futures behave differently |
 | DXY | DX-Y.NYB | Spot/cash | Dollar index. `DX=F` futures preferred but not available on yfinance. Small discrepancy vs Finviz which uses `DX=F`. |
-| Put/Call | CNN F&G API — `put_and_call_options.score` | Derived | CNN-normalised CBOE ratio on 0-100 scale. Higher = more calls vs puts = bullish. Lower = more puts vs calls = bearish hedging. Raw CBOE >1.0 = more puts. Contrarian indicator — extremes mark turning points. |
-| F&G Stocks | `production.dataviz.cnn.io/index/fearandgreed/graphdata` | Composite | CNN stock market Fear & Greed 0-100. Score shown as value, rating as label below. |
+| Put/Call | CNN F&G API — `put_and_call_options.score` | Derived | CNN-normalised CBOE ratio on 0-100 scale. Higher = more calls vs puts = bullish. Lower = more puts = bearish hedging. Delta tracked via session_state (n/a on first load). |
+| F&G Stocks | `production.dataviz.cnn.io/index/fearandgreed/graphdata` | Composite | CNN stock market Fear & Greed 0-100. Score as value, % change vs previous_close as delta. Rating shown abbreviated if delta unavailable. |
 
 **F&G Stocks — how to read:** Composite of 7 equal-weight sub-indicators:
 1. Market momentum (S&P vs 125-day MA)
@@ -104,7 +105,7 @@ Spot prices. Price discovery on 24/7 spot exchanges, not CME futures.
 |-------|--------------|---------|
 | Bitcoin | BTC-USD | Risk-on/off signal + digital gold proxy |
 | Ethereum | ETH-USD | Higher beta crypto, DeFi/tech sentiment |
-| F&G (Crypto) | api.alternative.me/fng/ | Crypto-only sentiment index. Inputs: volatility, momentum/volume, social media, dominance, Google trends. Placed here not in Risk Sentiment — it measures crypto market mood, not equity market mood. |
+| F&G Crypto | api.alternative.me/fng/?limit=2 | Crypto-only sentiment index. Score + % change vs yesterday. Inputs: volatility (25%), momentum/volume (25%), social media (15%), Bitcoin dominance (10%), Google Trends (10%). Placed here not in Risk Sentiment — measures crypto mood, not equity mood. Below 10 = capitulation. Above 80 = overheated. |
 
 ---
 
