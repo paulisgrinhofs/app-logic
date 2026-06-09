@@ -110,7 +110,7 @@ show_metric(cols[1], "DXY", "DX-Y.NYB", "USD index (spot). Rising = risk-off or 
 pc, pc_delta, pc_pct = fetch_put_call()
 with cols[2]:
     if pc is not None:
-        pc_delta_str = f"{'+' if pc_delta >= 0 else ''}{pc_delta} ({'+' if pc_pct >= 0 else ''}{pc_pct}%)" if pc_delta is not None else None
+        pc_delta_str = f"{'+' if pc_delta >= 0 else ''}{pc_delta} ({'+' if pc_pct >= 0 else ''}{pc_pct}%)" if (pc_delta is not None and pc_pct is not None) else (f"{'+' if pc_delta >= 0 else ''}{pc_delta}" if pc_delta is not None else None)
         st.metric(label="Put/Call", value=pc, delta=pc_delta_str, help="CNN-normalised Put/Call ratio (0-100 scale). Source: CBOE options data via CNN F&G API. Higher = more calls vs puts = bullish. Lower = more puts vs calls = bearish hedging. Contrarian: extremes often mark turning points. Change = vs previous close.")
     else:
         st.metric(label="Put/Call", value="n/a", help="Put/Call Ratio — sourced from CNN F&G API sub-components.")
@@ -118,7 +118,7 @@ with cols[2]:
 cnn_score, cnn_rating, cnn_delta, cnn_pct = fetch_fear_greed_cnn()
 with cols[3]:
     if cnn_score:
-        cnn_delta_str = f"{'+' if cnn_delta >= 0 else ''}{cnn_delta} ({'+' if cnn_pct >= 0 else ''}{cnn_pct}%)" if cnn_delta is not None else shorten_rating(cnn_rating)
+        cnn_delta_str = f"{'+' if cnn_delta >= 0 else ''}{cnn_delta} ({'+' if cnn_pct >= 0 else ''}{cnn_pct}%)" if (cnn_delta is not None and cnn_pct is not None) else shorten_rating(cnn_rating)
         st.metric(label=f"F&G Stocks", value=cnn_score, delta=cnn_delta_str, help="CNN Fear & Greed Index (equity markets). Composite of 7 inputs: market momentum, stock price strength, breadth, put/call options, junk bond demand, market volatility, safe haven demand. 0-25 = Extreme Fear. 25-45 = Fear. 45-55 = Neutral. 55-75 = Greed. 75-100 = Extreme Greed. Historically below 25 = long-term value buyers step in. Above 75 = market most vulnerable to pullback. Change = vs previous close.")
     else:
         st.metric(label="F&G Stocks", value="n/a", help="CNN Fear & Greed Index for equity markets.")
@@ -176,7 +176,7 @@ show_metric(cols[1], "Ethereum", "ETH-USD", "Spot ETH. Tracks BTC but higher bet
 crypto_score, crypto_rating, crypto_delta, crypto_pct = fetch_fear_greed_crypto()
 with cols[2]:
     if crypto_score is not None:
-        crypto_delta_str = f"{'+' if crypto_delta >= 0 else ''}{crypto_delta} ({'+' if crypto_pct >= 0 else ''}{crypto_pct}%)" if crypto_delta is not None else shorten_rating(crypto_rating)
+        crypto_delta_str = f"{'+' if crypto_delta >= 0 else ''}{crypto_delta} ({'+' if crypto_pct >= 0 else ''}{crypto_pct}%)" if (crypto_delta is not None and crypto_pct is not None) else shorten_rating(crypto_rating)
         st.metric(label="F&G Crypto", value=crypto_score, delta=crypto_delta_str, help="Alternative.me Crypto Fear & Greed Index. Tracks Bitcoin/crypto sentiment only — not equity markets. Inputs: volatility (25%), market momentum/volume (25%), social media (15%), Bitcoin dominance (10%), Google Trends (10%). 0-25 = Extreme Fear. 25-50 = Fear. 50-75 = Greed. 75-100 = Extreme Greed. Historically below 10 = capitulation zone, strong long-term entry signal. Above 80 = overheated, historically precedes corrections.")
     else:
         st.metric(label="F&G Crypto", value="n/a", help="Alternative.me Crypto Fear & Greed Index.")
