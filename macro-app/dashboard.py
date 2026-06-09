@@ -52,23 +52,8 @@ def fetch_ratio(t1, t2):
     except:
         return None, None, None
 
-def _fetch_fred_raw(series_id):
-    """Fetch FRED CSV data, trying two endpoints."""
-    headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
-    urls = [
-        f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}",
-        f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}&vintage_date=",
-    ]
-    for url in urls:
-        try:
-            r = requests.get(url.rstrip('&vintage_date=') if 'vintage' in url else url,
-                           timeout=15, headers=headers)
-            if r.status_code == 200 and ',' in r.text:
-                return r.text
-        except:
-            continue
-    return None
-    """Parse FRED CSV response into list of (date, float) obs, newest last."""
+def _parse_fred_csv(text):
+    """Parse FRED CSV into list of (date, float) obs, newest last."""
     obs = []
     for line in text.replace('\r\n', '\n').replace('\r', '\n').split('\n'):
         line = line.strip()
@@ -82,45 +67,51 @@ def _fetch_fred_raw(series_id):
                 continue
     return obs
 
+def _fetch_fred_raw(series_id):
+    """Fetch FRED CSV. Returns parsed obs list or empty list."""
+    headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
+    try:
+        r = requests.get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}",
+                         timeout=8, headers=headers)
+        if r.status_code == 200 and ',' in r.text:
+            return _parse_fred_csv(r.text)
+    except:
+        pass
+    return []
+
 def fetch_fred(series_id, cache_key):
     cache = st.session_state.get(cache_key)
     if cache and time.time() - cache['ts'] < 3600:
-        return cache['value'], cache['date'], cache['next_date']
-    text = _fetch_fred_raw(series_id)
-    if text:
-        obs = _parse_fred_csv(text)
-        if obs:
-            value, date = str(obs[-1][1]), obs[-1][0]
-            st.session_state[cache_key] = {'value': value, 'date': date, 'next_date': None, 'ts': time.time()}
-            return value, date, None
+        return cache['value'], cache['date'], None
+    obs = _fetch_fred_raw(series_id)
+    if obs:
+        value, date = str(obs[-1][1]), obs[-1][0]
+        st.session_state[cache_key] = {'value': value, 'date': date, 'ts': time.time()}
+        return value, date, None
     return None, None, None
 
 def fetch_fred_yoy(series_id, cache_key):
     cache = st.session_state.get(cache_key)
     if cache and time.time() - cache['ts'] < 3600:
         return cache['value'], cache['yoy'], cache['date']
-    text = _fetch_fred_raw(series_id)
-    if text:
-        obs = _parse_fred_csv(text)
-        if len(obs) >= 13:
-            current_val, current_date = obs[-1][1], obs[-1][0]
-            yoy = round(((current_val - obs[-13][1]) / obs[-13][1]) * 100, 2)
-            st.session_state[cache_key] = {'value': current_val, 'yoy': yoy, 'date': current_date, 'ts': time.time()}
-            return current_val, yoy, current_date
+    obs = _fetch_fred_raw(series_id)
+    if len(obs) >= 13:
+        current_val, current_date = obs[-1][1], obs[-1][0]
+        yoy = round(((current_val - obs[-13][1]) / obs[-13][1]) * 100, 2)
+        st.session_state[cache_key] = {'value': current_val, 'yoy': yoy, 'date': current_date, 'ts': time.time()}
+        return current_val, yoy, current_date
     return None, None, None
 
 def fetch_fred_mom(series_id, cache_key):
     cache = st.session_state.get(cache_key)
     if cache and time.time() - cache['ts'] < 3600:
         return cache['value'], cache['mom'], cache['date']
-    text = _fetch_fred_raw(series_id)
-    if text:
-        obs = _parse_fred_csv(text)
-        if len(obs) >= 2:
-            current_val, current_date = obs[-1][1], obs[-1][0]
-            mom = round(current_val - obs[-2][1], 1)
-            st.session_state[cache_key] = {'value': current_val, 'mom': mom, 'date': current_date, 'ts': time.time()}
-            return current_val, mom, current_date
+    obs = _fetch_fred_raw(series_id)
+    if len(obs) >= 2:
+        current_val, current_date = obs[-1][1], obs[-1][0]
+        mom = round(current_val - obs[-2][1], 1)
+        st.session_state[cache_key] = {'value': current_val, 'mom': mom, 'date': current_date, 'ts': time.time()}
+        return current_val, mom, current_date
     return None, None, None
 
 RATING_SHORT = {
