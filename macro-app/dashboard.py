@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import requests
 import time
+import threading
 
 st.set_page_config(layout="wide")
 st.title("Macro Dashboard")
@@ -20,6 +21,49 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
+
+def _prefetch_slow():
+    """Run slow fetches in parallel background threads so they don't block page render."""
+    def _fred(series_id, cache_key, mode):
+        if st.session_state.get(cache_key) and time.time() - st.session_state[cache_key]['ts'] < 3600:
+            return
+        obs = _fetch_fred_raw(series_id)
+        if not obs:
+            return
+        if mode == 'single':
+            st.session_state[cache_key] = {'value': str(obs[-1][1]), 'date': obs[-1][0], 'ts': time.time()}
+        elif mode == 'yoy' and len(obs) >= 13:
+            yoy = round(((obs[-1][1] - obs[-13][1]) / obs[-13][1]) * 100, 2)
+            st.session_state[cache_key] = {'value': obs[-1][1], 'yoy': yoy, 'date': obs[-1][0], 'ts': time.time()}
+        elif mode == 'mom' and len(obs) >= 2:
+            mom = round(obs[-1][1] - obs[-2][1], 1)
+            st.session_state[cache_key] = {'value': obs[-1][1], 'mom': mom, 'date': obs[-1][0], 'ts': time.time()}
+
+    def _zq():
+        cache_key = 'zq_cache'
+        if st.session_state.get(cache_key) and time.time() - st.session_state[cache_key]['ts'] < 120:
+            return
+        try:
+            data = yf.Ticker("ZQ=F")
+            price = round(data.fast_info['last_price'], 3)
+            prev = round(data.fast_info['previous_close'], 3)
+            st.session_state[cache_key] = {'price': price, 'prev': prev, 'ts': time.time()}
+        except:
+            pass
+
+    threads = [
+        threading.Thread(target=_fred, args=("ICSA", "fred_icsa", "single")),
+        threading.Thread(target=_fred, args=("CPIAUCSL", "fred_cpi", "yoy")),
+        threading.Thread(target=_fred, args=("PAYEMS", "fred_nfp", "mom")),
+        threading.Thread(target=_zq),
+    ]
+    for t in threads:
+        t.daemon = True
+        t.start()
+    for t in threads:
+        t.join(timeout=10)
+
+_prefetch_slow()
 
 def fmt_delta(delta, pct):
     if delta is None:
@@ -286,12 +330,14 @@ with cols[2]:
 st.markdown("### Macro Data")
 cols = st.columns(8)
 
-# Fed Funds implied rate from ZQ=F (30-day Fed Funds futures: implied rate = 100 - price)
-zq_price, zq_delta, zq_pct = fetch("ZQ=F")
+# Fed Funds implied rate — read from prefetch cache
+zq_cache = st.session_state.get('zq_cache', {})
+zq_price = zq_cache.get('price')
+zq_prev = zq_cache.get('prev')
 with cols[0]:
     if zq_price is not None:
         implied_rate = round(100 - zq_price, 3)
-        implied_prev = round(100 - (zq_price - zq_delta), 3) if zq_delta is not None else None
+        implied_prev = round(100 - zq_prev, 3) if zq_prev is not None else None
         rate_delta = round(implied_rate - implied_prev, 3) if implied_prev is not None else None
         rate_pct = round((rate_delta / implied_prev) * 100, 2) if (rate_delta and implied_prev) else None
         st.metric(label="Fed Funds Implied", value=f"{implied_rate}%", delta=fmt_delta(rate_delta, rate_pct),
