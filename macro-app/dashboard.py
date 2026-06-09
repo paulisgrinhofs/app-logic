@@ -87,16 +87,16 @@ show_metric(cols[1], "DXY", "DX-Y.NYB", "USD index (spot). Rising = risk-off or 
 pc = fetch_put_call()
 with cols[2]:
     if pc is not None:
-        st.metric(label="Put/Call", value=pc, help="Put/Call Ratio sub-component from CNN F&G index. CNN normalises the raw CBOE ratio into a 0-100 score. Above 1.0 = more puts than calls = bearish hedging. Below 0.7 = complacency / bullish positioning. Contrarian signal: extremes often mark turning points.")
+        st.metric(label="Put/Call", value=pc, help="CNN-normalised Put/Call ratio (0-100 scale, same as F&G index). Source: CBOE options data via CNN F&G API. Higher score = more calls vs puts = bullish positioning (greed). Lower score = more puts vs calls = bearish hedging (fear). Raw CBOE ratio above 1.0 means more puts than calls. Contrarian: extreme readings often mark turning points.")
     else:
         st.metric(label="Put/Call", value="n/a", help="Put/Call Ratio — sourced from CNN F&G API sub-components.")
 
 cnn_score, cnn_rating = fetch_fear_greed_cnn()
 with cols[3]:
     if cnn_score:
-        st.metric(label="F&G (Stocks)", value=f"{cnn_score} — {cnn_rating}", help="CNN Fear & Greed Index (equity markets). Composite of 7 inputs: market momentum, stock price strength, stock price breadth, put/call options, junk bond demand, market volatility, and safe haven demand. 0-25 = Extreme Fear. 25-45 = Fear. 45-55 = Neutral. 55-75 = Greed. 75-100 = Extreme Greed.")
+        st.metric(label="F&G Stocks", value=cnn_score, delta=cnn_rating, delta_color="off", help="CNN Fear & Greed Index (equity markets). Composite of 7 inputs: market momentum, stock price strength, breadth, put/call options, junk bond demand, market volatility, safe haven demand. 0-25 = Extreme Fear. 25-45 = Fear. 45-55 = Neutral. 55-75 = Greed. 75-100 = Extreme Greed.")
     else:
-        st.metric(label="F&G (Stocks)", value="n/a", help="CNN Fear & Greed Index for equity markets.")
+        st.metric(label="F&G Stocks", value="n/a", help="CNN Fear & Greed Index for equity markets.")
 
 # --- EQUITY FUTURES & INDICES ---
 st.markdown("### Equity Futures & Indices")
@@ -142,9 +142,9 @@ show_metric(cols[1], "Ethereum", "ETH-USD", "Spot ETH. Tracks BTC but higher bet
 crypto_score, crypto_rating = fetch_fear_greed_crypto()
 with cols[2]:
     if crypto_score is not None:
-        st.metric(label="F&G (Crypto)", value=f"{crypto_score} — {crypto_rating}", help="Alternative.me Crypto Fear & Greed Index. Tracks Bitcoin/crypto sentiment only — not equity markets. Inputs: volatility (25%), market momentum/volume (25%), social media (15%), dominance (10%), trends (10%). 0-25 = Extreme Fear. 75-100 = Extreme Greed.")
+        st.metric(label="F&G Crypto", value=crypto_score, delta=crypto_rating, delta_color="off", help="Alternative.me Crypto Fear & Greed Index. Tracks Bitcoin/crypto sentiment only — not equity markets. Inputs: volatility (25%), market momentum/volume (25%), social media (15%), Bitcoin dominance (10%), Google Trends (10%). 0-25 = Extreme Fear. 25-50 = Fear. 50-75 = Greed. 75-100 = Extreme Greed.")
     else:
-        st.metric(label="F&G (Crypto)", value="n/a", help="Alternative.me Crypto Fear & Greed Index.")
+        st.metric(label="F&G Crypto", value="n/a", help="Alternative.me Crypto Fear & Greed Index.")
 
 # --- CURRENCIES ---
 st.markdown("### Currencies")

@@ -9,10 +9,10 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 `dashboard.py` is a single-page Streamlit app with 6 sections, each rendered as a horizontal row of fixed-width (160px) metric cards. Data fetched via `yfinance` and `requests`, refreshing every 30 seconds via `st.rerun()`.
 
 ### Key functions
-- `fetch(ticker)` — fetches last price, previous close, delta, % change via yfinance
-- `fetch_put_call()` — fetches CBOE Total Put/Call Ratio via `^PCCR` yfinance ticker (history method)
-- `fetch_fear_greed_cnn()` — fetches CNN stock market Fear & Greed from feargreedchart.com (with User-Agent header)
-- `fetch_fear_greed_crypto()` — fetches crypto Fear & Greed from api.alternative.me/fng/
+- `fetch(ticker)` — fetches last price, previous close, delta, % change via yfinance `fast_info`
+- `fetch_put_call()` — extracts Put/Call sub-component from CNN F&G API (`put_and_call_options.score`)
+- `fetch_fear_greed_cnn()` — fetches CNN stock Fear & Greed from `production.dataviz.cnn.io` with User-Agent header
+- `fetch_fear_greed_crypto()` — fetches crypto Fear & Greed from `api.alternative.me/fng/`
 - `show_metric(col, label, ticker, help_text)` — renders metric card with delta, % change, tooltip
 
 ---
@@ -26,12 +26,23 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 |-------|--------------|------|-------|
 | VIX | ^VIX | Spot | Fear gauge. Spot used — VIX futures behave differently |
 | DXY | DX-Y.NYB | Spot/cash | Dollar index. `DX=F` futures preferred but not available on yfinance. Small discrepancy vs Finviz which uses `DX=F`. |
-| Put/Call | CNN F&G API sub-component | Derived | Extracted from `fear_and_greed.put_call_options.score` in CNN endpoint. CNN normalises raw CBOE ratio. yfinance tickers (^PCCR, ^CPC, ^CPCE) all return empty — Yahoo strips specialist indices. |
-| F&G (Stocks) | production.dataviz.cnn.io | Composite | CNN stock market Fear & Greed 0-100. 7 inputs: momentum, price strength, breadth, put/call, junk bond demand, volatility, safe haven demand. Requires User-Agent header. |
+| Put/Call | CNN F&G API — `put_and_call_options.score` | Derived | CNN-normalised CBOE ratio on 0-100 scale. Higher = more calls vs puts = bullish. Lower = more puts vs calls = bearish hedging. Raw CBOE >1.0 = more puts. Contrarian indicator — extremes mark turning points. |
+| F&G Stocks | `production.dataviz.cnn.io/index/fearandgreed/graphdata` | Composite | CNN stock market Fear & Greed 0-100. Score shown as value, rating as label below. |
 
-**F&G (Crypto)** moved to Crypto section — it is a separate index (alternative.me) tracking Bitcoin sentiment only. Inputs: volatility, momentum/volume, social media, dominance, trends. Should not be read alongside equity F&G.
+**F&G Stocks — how to read:** Composite of 7 equal-weight sub-indicators:
+1. Market momentum (S&P vs 125-day MA)
+2. Stock price strength (52-week highs vs lows on NYSE)
+3. Stock price breadth (advancing vs declining volume)
+4. Put/Call options (CBOE ratio)
+5. Junk bond demand (spread between high-yield and investment-grade)
+6. Market volatility (VIX vs 50-day MA)
+7. Safe haven demand (stock vs bond returns)
 
-**Put/Call sourcing:** Direct CBOE scraping blocked (403). yfinance tickers for put/call return no data. CNN's own API sub-component is the only reliable free source — returns CNN's normalised version of the CBOE ratio.
+Each sub-indicator scored 0-100 → averaged to composite. Score reflects crowd sentiment, not fundamentals. Use as contrarian signal at extremes (below 25 or above 75).
+
+**F&G (Crypto)** moved to Crypto section — separate index (alternative.me) tracking Bitcoin market sentiment only. Not an equity signal.
+
+**Put/Call sourcing history:** CBOE direct scraping blocked (403). yfinance tickers ^PCCR, ^CPC, ^CPCE all return empty data. CNN F&G API `put_and_call_options` top-level key is the only working free source.
 
 **Known discrepancy:** DXY shows slightly different value vs Finviz — Finviz uses `DX=F` futures, we use `DX-Y.NYB` spot.
 
