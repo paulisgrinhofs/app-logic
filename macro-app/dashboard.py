@@ -22,8 +22,63 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def fmt_delta(delta, pct):
+    if delta is None:
+        return None
+    if pct is not None:
+        return f"{'+' if delta >= 0 else ''}{delta} ({'+' if pct >= 0 else ''}{pct}%)"
+    return f"{'+' if delta >= 0 else ''}{delta}"
+
+def fetch(ticker):
+    try:
+        data = yf.Ticker(ticker)
+        price = round(data.fast_info['last_price'], 2)
+        prev = round(data.fast_info['previous_close'], 2)
+        delta = round(price - prev, 2)
+        pct = round((delta / prev) * 100, 2) if prev else 0
+        return price, delta, pct
+    except:
+        return None, None, None
+
+def fetch_ratio(t1, t2):
+    try:
+        d1 = yf.Ticker(t1).fast_info
+        d2 = yf.Ticker(t2).fast_info
+        price = round(d1['last_price'] / d2['last_price'], 4)
+        prev = round(d1['previous_close'] / d2['previous_close'], 4)
+        delta = round(price - prev, 4)
+        pct = round((delta / prev) * 100, 2) if prev else 0
+        return price, delta, pct
+    except:
+        return None, None, None
+
+def _parse_fred_csv(text):
+    obs = []
+    for line in text.replace('\r\n', '\n').replace('\r', '\n').split('\n'):
+        line = line.strip()
+        if not line or line.startswith('DATE'):
+            continue
+        parts = line.split(',')
+        if len(parts) >= 2 and parts[1].strip() not in ('', '.'):
+            try:
+                obs.append((parts[0].strip(), float(parts[1].strip())))
+            except ValueError:
+                continue
+    return obs
+
+def _fetch_fred_raw(series_id):
+    headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
+    try:
+        r = requests.get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}",
+                         timeout=8, headers=headers)
+        if r.status_code == 200 and ',' in r.text:
+            return _parse_fred_csv(r.text)
+    except:
+        pass
+    return []
+
 def _prefetch_slow():
-    """Run slow fetches in parallel background threads so they don't block page render."""
+    """Run slow fetches in parallel threads before page renders."""
     def _fred(series_id, cache_key, mode):
         if st.session_state.get(cache_key) and time.time() - st.session_state[cache_key]['ts'] < 3600:
             return
@@ -64,64 +119,6 @@ def _prefetch_slow():
         t.join(timeout=10)
 
 _prefetch_slow()
-
-def fmt_delta(delta, pct):
-    if delta is None:
-        return None
-    if pct is not None:
-        return f"{'+' if delta >= 0 else ''}{delta} ({'+' if pct >= 0 else ''}{pct}%)"
-    return f"{'+' if delta >= 0 else ''}{delta}"
-
-def fetch(ticker):
-    try:
-        data = yf.Ticker(ticker)
-        price = round(data.fast_info['last_price'], 2)
-        prev = round(data.fast_info['previous_close'], 2)
-        delta = round(price - prev, 2)
-        pct = round((delta / prev) * 100, 2) if prev else 0
-        return price, delta, pct
-    except:
-        return None, None, None
-
-def fetch_ratio(t1, t2):
-    """Fetch price ratio of two tickers with delta vs previous close."""
-    try:
-        d1 = yf.Ticker(t1).fast_info
-        d2 = yf.Ticker(t2).fast_info
-        price = round(d1['last_price'] / d2['last_price'], 4)
-        prev = round(d1['previous_close'] / d2['previous_close'], 4)
-        delta = round(price - prev, 4)
-        pct = round((delta / prev) * 100, 2) if prev else 0
-        return price, delta, pct
-    except:
-        return None, None, None
-
-def _parse_fred_csv(text):
-    """Parse FRED CSV into list of (date, float) obs, newest last."""
-    obs = []
-    for line in text.replace('\r\n', '\n').replace('\r', '\n').split('\n'):
-        line = line.strip()
-        if not line or line.startswith('DATE'):
-            continue
-        parts = line.split(',')
-        if len(parts) >= 2 and parts[1].strip() not in ('', '.'):
-            try:
-                obs.append((parts[0].strip(), float(parts[1].strip())))
-            except ValueError:
-                continue
-    return obs
-
-def _fetch_fred_raw(series_id):
-    """Fetch FRED CSV. Returns parsed obs list or empty list."""
-    headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
-    try:
-        r = requests.get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}",
-                         timeout=8, headers=headers)
-        if r.status_code == 200 and ',' in r.text:
-            return _parse_fred_csv(r.text)
-    except:
-        pass
-    return []
 
 def fetch_fred(series_id, cache_key):
     cache = st.session_state.get(cache_key)
