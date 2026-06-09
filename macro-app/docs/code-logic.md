@@ -8,11 +8,12 @@ For instrument selection rationale (futures vs spot) see the discussion in sessi
 
 ## Architecture
 
-`dashboard.py` is structured as a single-page Streamlit app with 6 sections, each rendered as a horizontal row of fixed-width (160px) metric cards. All data is fetched live via `yfinance` on page load and refreshes every 30 seconds via `st.rerun()`.
+`dashboard.py` is structured as a single-page Streamlit app with 6 sections, each rendered as a horizontal row of fixed-width (160px) metric cards. Data is fetched live via `yfinance` and `requests` on page load, refreshing every 30 seconds via `st.rerun()`.
 
 ### Key functions
-- `fetch(ticker)` — fetches last price, previous close, delta, and % change for any ticker
-- `show_metric(col, label, ticker, help_text)` — renders a single metric card with delta and tooltip
+- `fetch(ticker)` — fetches last price, previous close, delta, and % change via yfinance
+- `fetch_put_call()` — scrapes CBOE daily stats page for total put/call ratio
+- `show_metric(col, label, ticker, help_text)` — renders a metric card with delta, % change, and tooltip
 
 ---
 
@@ -21,11 +22,13 @@ For instrument selection rationale (futures vs spot) see the discussion in sessi
 ### 1. Risk Sentiment
 **Logic ref:** `macro-logic.md` → Inputs → Price/Market, and Classification Logic context layer
 
-| Label | Ticker | Type | Purpose |
-|-------|--------|------|---------|
+| Label | Ticker | Type | Notes |
+|-------|--------|------|-------|
 | VIX | ^VIX | Spot | Fear gauge. Spot used — VIX futures behave differently from spot index |
-| DXY | DX=F | Futures | Dollar strength. Futures used as institutional baseline |
-| Put/Call | ^PCCE | Spot | Options sentiment. Equity-only ratio |
+| DXY | DX-Y.NYB | Spot/cash | Dollar index. `DX=F` futures preferred but not reliably available on yfinance. Finviz uses `DX=F` which causes small price discrepancy. |
+| Put/Call | CBOE page | Scraped | Total put/call ratio fetched directly from CBOE daily stats. yfinance tickers (^CPC, ^PCCE) unreliable. |
+
+**Known discrepancy:** DXY will show slightly different value vs Finviz because Finviz uses `DX=F` futures while we use `DX-Y.NYB` spot. Direction and story are the same.
 
 ---
 
@@ -38,11 +41,11 @@ US indices use futures (captures overnight macro risk). International indices us
 |-------|--------|------|-------|
 | S&P 500 | ES=F | Futures | US — primary equity risk indicator |
 | NASDAQ | NQ=F | Futures | US — leads tech/growth sentiment |
-| Nikkei | ^N225 | Cash index | Japan — shows Asian session direction |
-| EuroStoxx | ^STOXX50E | Cash index | Europe benchmark |
-| DAX | ^GDAXI | Cash index | Germany — export/China proxy |
-| KOSPI | ^KS11 | Cash index | South Korea — Asia tech bellwether |
-| CSI 300 | 000300.SS | Cash index | China domestic economy gauge |
+| Nikkei | ^N225 | Cash index | Japan — shows Asian session direction. Stale when market closed. |
+| EuroStoxx | ^STOXX50E | Cash index | Europe benchmark. Stale when market closed. |
+| DAX | ^GDAXI | Cash index | Germany — export/China proxy. Stale when market closed. |
+| KOSPI | ^KS11 | Cash index | South Korea — Asia tech bellwether. Stale when market closed. |
+| CSI 300 | 000300.SS | Cash index | China domestic economy gauge. Stale when market closed. |
 
 ---
 
@@ -101,6 +104,7 @@ Spot prices used. Crypto price discovery happens on 24/7 spot exchanges, not CME
 ---
 
 ## Open Items
-- Put/Call Ratio (^PCCE) intermittently unavailable via yfinance — alternative source TBD
-- International equity indices use cash prices — will show stale when those markets are closed
-- Refresh rate: 30 seconds. May adjust based on usage patterns
+- DXY: using spot `DX-Y.NYB` instead of futures `DX=F` — small price discrepancy vs Finviz. To fix when alternative data source found.
+- Put/Call: scraped from CBOE page — fragile if CBOE changes page structure
+- International equity indices: cash prices, stale when those markets are closed
+- Refresh rate: 30 seconds. May adjust based on usage
