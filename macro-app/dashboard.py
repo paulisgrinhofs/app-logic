@@ -1,11 +1,11 @@
 import streamlit as st
 import yfinance as yf
+import requests
 import time
 
 st.set_page_config(layout="wide")
 st.title("Macro Dashboard")
 
-# Fixed column width via CSS
 st.markdown("""
 <style>
 [data-testid="stMetric"] {
@@ -32,6 +32,21 @@ def fetch(ticker):
     except:
         return None, None, None
 
+def fetch_put_call():
+    try:
+        url = "https://www.cboe.com/us/options/market_statistics/daily/"
+        r = requests.get(url, timeout=5)
+        # parse total put/call ratio from CBOE page
+        for line in r.text.splitlines():
+            if 'Total Put/Call' in line:
+                import re
+                nums = re.findall(r'\d+\.\d+', line)
+                if nums:
+                    return float(nums[0])
+    except:
+        pass
+    return None
+
 def show_metric(col, label, ticker, help_text):
     with col:
         price, delta, pct = fetch(ticker)
@@ -45,8 +60,13 @@ def show_metric(col, label, ticker, help_text):
 st.markdown("### Risk Sentiment")
 cols = st.columns(8)
 show_metric(cols[0], "VIX", "^VIX", "Fear index. Below 15 = calm. 15-25 = caution. Above 25 = fear. Above 30 = panic.")
-show_metric(cols[1], "DXY", "DX=F", "USD futures. Rising = risk-off or strong US growth. Falling = risk-on.")
-show_metric(cols[2], "Put/Call", "^PCCE", "Equity put/call ratio. Below 0.7 = complacency. Above 1.0 = fear.")
+show_metric(cols[1], "DXY", "DX-Y.NYB", "USD index (spot). Rising = risk-off or strong US growth. Falling = risk-on.")
+pc = fetch_put_call()
+with cols[2]:
+    if pc:
+        st.metric(label="Put/Call", value=pc, help="CBOE total put/call ratio. Below 0.7 = complacency. Above 1.0 = fear.")
+    else:
+        st.metric(label="Put/Call", value="n/a", help="CBOE total put/call ratio. Below 0.7 = complacency. Above 1.0 = fear.")
 
 # --- EQUITY FUTURES & INDICES ---
 st.markdown("### Equity Futures & Indices")
@@ -59,7 +79,7 @@ show_metric(cols[4], "DAX", "^GDAXI", "Germany cash index. Export-heavy, sensiti
 show_metric(cols[5], "KOSPI", "^KS11", "South Korea cash index. Tech and export bellwether for Asia.")
 show_metric(cols[6], "CSI 300", "000300.SS", "China large cap cash index. Key gauge of Chinese domestic economy.")
 
-# --- RATES (spot) ---
+# --- RATES ---
 st.markdown("### Rates")
 cols = st.columns(8)
 show_metric(cols[0], "2yr Yield", "^IRX", "2-year Treasury spot yield. Most sensitive to Fed rate expectations.")
@@ -84,7 +104,7 @@ show_metric(cols[2], "Gold", "GC=F", "Gold futures. Safe haven. Rising = risk-of
 show_metric(cols[3], "Silver", "SI=F", "Silver futures. Industrial + safe haven hybrid. Tracks gold but more volatile.")
 show_metric(cols[4], "Copper", "HG=F", "Copper futures. Leading indicator of global economic health. Rising = growth.")
 
-# --- CRYPTO (spot) ---
+# --- CRYPTO ---
 st.markdown("### Crypto")
 cols = st.columns(8)
 show_metric(cols[0], "Bitcoin", "BTC-USD", "Spot BTC. Risk-on asset. Tracks NASDAQ in risk-off, digital gold in inflation.")
