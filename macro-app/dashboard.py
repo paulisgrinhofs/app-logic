@@ -61,7 +61,6 @@ def fetch_fred(series_id, cache_key):
         url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
         r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
         lines = [l for l in r.text.strip().split('\n') if l and not l.startswith('DATE')]
-        # Find last non-empty observation
         for line in reversed(lines):
             parts = line.split(',')
             if len(parts) >= 2 and parts[1].strip() not in ('', '.'):
@@ -69,6 +68,31 @@ def fetch_fred(series_id, cache_key):
                 next_date = None
                 st.session_state[cache_key] = {'value': value, 'date': date, 'next_date': next_date, 'ts': time.time()}
                 return value, date, next_date
+    except:
+        pass
+    return None, None, None
+
+def fetch_fred_yoy(series_id, cache_key):
+    """Fetch latest value + YoY % change from FRED. Returns (value, yoy_pct, date). Caches 1hr."""
+    cache = st.session_state.get(cache_key)
+    if cache and time.time() - cache['ts'] < 3600:
+        return cache['value'], cache['yoy'], cache['date']
+    try:
+        url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+        r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        lines = [l for l in r.text.strip().split('\n') if l and not l.startswith('DATE')]
+        obs = []
+        for line in lines:
+            parts = line.split(',')
+            if len(parts) >= 2 and parts[1].strip() not in ('', '.'):
+                obs.append((parts[0].strip(), float(parts[1].strip())))
+        if len(obs) < 13:
+            return None, None, None
+        current_val, current_date = obs[-1][1], obs[-1][0]
+        year_ago_val = obs[-13][1]
+        yoy = round(((current_val - year_ago_val) / year_ago_val) * 100, 2)
+        st.session_state[cache_key] = {'value': current_val, 'yoy': yoy, 'date': current_date, 'ts': time.time()}
+        return current_val, yoy, current_date
     except:
         pass
     return None, None, None
@@ -272,16 +296,17 @@ with cols[1]:
     else:
         st.metric(label="Jobless Claims", value="n/a", help="Weekly initial jobless claims from FRED (ICSA).")
 
-# CPI — FRED series CPIAUCSL (monthly)
-cpi_val, cpi_date, _ = fetch_fred("CPIAUCSL", "fred_cpi")
+# CPI YoY — FRED series CPIAUCSL (monthly), calculated from 13 months of data
+cpi_val, cpi_yoy, cpi_date = fetch_fred_yoy("CPIAUCSL", "fred_cpi")
 with cols[2]:
-    if cpi_val:
-        st.metric(label="CPI", value=cpi_val, delta=cpi_date, delta_color="off",
-            help=f"CPI index level (FRED: CPIAUCSL, all urban consumers). Monthly release. "
-                 f"This shows the index level — the key number is YoY % change (not shown here, calculate externally). "
-                 f"Fed target: ~2% YoY. Hot: >3%. Crisis: >6% (2022 peak: 9.1% YoY). Deflation risk: <0%. Last release: {cpi_date}.")
+    if cpi_yoy is not None:
+        yoy_str = f"{'+' if cpi_yoy >= 0 else ''}{cpi_yoy}% YoY"
+        st.metric(label="CPI YoY", value=f"{cpi_yoy}%", delta=cpi_date, delta_color="off",
+            help=f"CPI year-on-year % change (FRED: CPIAUCSL). Calculated from current vs 12 months prior. "
+                 f"Fed target: ~2%. Cooling: 2–3%. Hot: 3–5%. Crisis: >6% (2022 peak: 9.1%). Deflation risk: <0%. "
+                 f"Last release: {cpi_date}.")
     else:
-        st.metric(label="CPI", value="n/a", help="CPI from FRED (CPIAUCSL).")
+        st.metric(label="CPI YoY", value="n/a", help="CPI YoY % change from FRED (CPIAUCSL).")
 
 # NFP — FRED series PAYEMS (monthly, first Friday)
 nfp_val, nfp_date, _ = fetch_fred("PAYEMS", "fred_nfp")
@@ -325,5 +350,5 @@ show_metric(cols[1], "USD/JPY", "JPY=X", "Dollar vs Yen. Rising = risk-on. Falli
 show_metric(cols[2], "GBP/USD", "GBPUSD=X", "Pound vs Dollar. Sensitive to UK macro and global risk appetite.")
 show_metric(cols[3], "USD/CNY", "USDCNY=X", "Dollar vs Yuan. Rising = yuan weakening, often signals China stress.")
 
-time.sleep(30)
+time.sleep(120)
 st.rerun()

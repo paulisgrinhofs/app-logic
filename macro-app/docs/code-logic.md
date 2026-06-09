@@ -15,7 +15,8 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 | `fmt_delta(delta, pct)` | Shared delta string formatter. Handles None safely. Returns `+1.2 (+0.5%)` style string or just `+1.2` if pct unavailable. |
 | `fetch(ticker)` | yfinance `fast_info` — last price, previous close, delta, % change |
 | `fetch_ratio(t1, t2)` | Fetches ratio of two tickers (e.g. HYG/TLT, RSP/SPY) with delta vs previous close ratio |
-| `fetch_fred(series_id, cache_key)` | FRED CSV endpoint (`fred.stlouisfed.org/graph/fredgraph.csv`). Returns (value, release_date, next_date). Cached in session_state for 1hr. No API key required. Parser skips header row and empty/`.` observations, iterates from last line backward to find most recent valid value. User-Agent header added to avoid 403. |
+| `fetch_fred(series_id, cache_key)` | FRED CSV endpoint. Returns (value, release_date, next_date). Cached 1hr. Parser skips header and empty/`.` observations, iterates backward for most recent valid value. User-Agent header required. |
+| `fetch_fred_yoy(series_id, cache_key)` | Same endpoint but parses all observations, takes last value and value 12 entries prior, computes YoY % change. Used for CPI. Returns (value, yoy_pct, date). Cached 1hr. |
 | `fetch_put_call()` | CNN F&G API `put_and_call_options.score`. No previous_close in sub-component — delta tracked via `session_state['pc_prev']`, n/a on first load. |
 | `fetch_fear_greed_cnn()` | CNN F&G composite score + rating + delta from `fear_and_greed.previous_close` |
 | `fetch_fear_greed_crypto()` | alternative.me crypto F&G, `?limit=2` for today + yesterday delta |
@@ -120,7 +121,7 @@ All FRED data uses the free CSV endpoint (`fred.stlouisfed.org/graph/fredgraph.c
 |-------|--------|-----------|-----------------|
 | Fed Funds Implied | ZQ=F (yfinance) | Live | Compare to current FOMC target. Gap = market pricing cuts/hikes. Overnight shift = catalyst changed rate expectations. |
 | Jobless Claims | FRED: ICSA | Weekly (Thu 8:30am ET) | Healthy <220k. Normal 220–260k. Elevated 260–300k. Concern 300–400k. Recession signal >400k sustained. (2020 peak: 6.1M) |
-| CPI | FRED: CPIAUCSL | Monthly | Index level only — YoY % change not calculated here yet. Fed target ~2% YoY. Hot >3%. Crisis >6% (2022 peak: 9.1%). |
+| CPI YoY | FRED: CPIAUCSL | Monthly | YoY % calculated via `fetch_fred_yoy()` — fetches full history, computes current vs 12 months prior. Fed target ~2%. Cooling 2–3%. Hot 3–5%. Crisis >6% (2022 peak 9.1%). |
 | NFP | FRED: PAYEMS | Monthly (first Fri) | Monthly change is the signal, not absolute level. Strong >250k. Healthy 150–250k. Weak <50k. Recession = negative. |
 
 **Display:** Value shown as main metric. Release date shown as delta label (grey, `delta_color="off"`). Future build: add next release date when FRED release calendar API is integrated.
@@ -166,3 +167,9 @@ All FRED data uses the free CSV endpoint (`fred.stlouisfed.org/graph/fredgraph.c
 - FRED next release dates: `fetch_fred()` has placeholder for next_date — requires FRED API key for release calendar endpoint. Add when key available.
 - Sector ETF flow row: planned next build. Will need `fetch_with_volume()` for price + volume vs 20-day avg.
 - Events calendar: planned future build. Will consume `release_date` and `next_date` fields already structured in `fetch_fred()`.
+- NFP: shows total employment level — month-on-month change would be more useful. Requires fetching 2 observations like CPI YoY.
+
+## Refresh Rate
+- **Current: 120 seconds (2 minutes).** Reduced from 30s — dashboard now has ~20 data sources, 30s caused excessive API load.
+- FRED data is cached for 1hr in session_state, so refresh only re-fetches yfinance and CNN calls.
+- If deploying to Streamlit Cloud, consider caching yfinance calls too (`@st.cache_data(ttl=120)`).
