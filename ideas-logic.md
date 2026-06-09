@@ -139,3 +139,5 @@ Most relevant to what you're building:
 4. GitHub: tradermonty/claude-trading-skills — specifically has market environment analysis, sector rotation identification, and regime classification. Open source, Python, directly borrowable logic.
 
 5. SentimenTrader — their composite trend model scores sectors 0–10 based on momentum. Their confidence scoring approach is worth adapting for your High/Medium/Low confidence output.
+
+Futures (finviz) nvesting Interpretation: Use the "term structure" (comparing a 1-month contract to a 6-month contract) to see if institutions expect long-term supply shortages.
