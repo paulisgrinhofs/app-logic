@@ -32,20 +32,16 @@ def fetch(ticker):
     except:
         return None, None, None
 
-def fetch_put_call():
+def fetch_fear_greed():
     try:
-        url = "https://www.cboe.com/us/options/market_statistics/daily/"
+        url = "https://feargreedchart.com/api/?action=all"
         r = requests.get(url, timeout=5)
-        # parse total put/call ratio from CBOE page
-        for line in r.text.splitlines():
-            if 'Total Put/Call' in line:
-                import re
-                nums = re.findall(r'\d+\.\d+', line)
-                if nums:
-                    return float(nums[0])
+        data = r.json()
+        score = data['fear_greed']['score']
+        rating = data['fear_greed']['rating']
+        return score, rating
     except:
-        pass
-    return None
+        return None, None
 
 def show_metric(col, label, ticker, help_text):
     with col:
@@ -61,12 +57,16 @@ st.markdown("### Risk Sentiment")
 cols = st.columns(8)
 show_metric(cols[0], "VIX", "^VIX", "Fear index. Below 15 = calm. 15-25 = caution. Above 25 = fear. Above 30 = panic.")
 show_metric(cols[1], "DXY", "DX-Y.NYB", "USD index (spot). Rising = risk-off or strong US growth. Falling = risk-on.")
-pc = fetch_put_call()
+score, rating = fetch_fear_greed()
 with cols[2]:
-    if pc:
-        st.metric(label="Put/Call", value=pc, help="CBOE total put/call ratio. Below 0.7 = complacency. Above 1.0 = fear.")
+    if score:
+        st.metric(
+            label="Fear & Greed",
+            value=f"{score} — {rating}",
+            help="CNN Fear & Greed Index. 0-25 = Extreme Fear. 25-45 = Fear. 45-55 = Neutral. 55-75 = Greed. 75-100 = Extreme Greed."
+        )
     else:
-        st.metric(label="Put/Call", value="n/a", help="CBOE total put/call ratio. Below 0.7 = complacency. Above 1.0 = fear.")
+        st.metric(label="Fear & Greed", value="n/a", help="CNN Fear & Greed Index 0-100.")
 
 # --- EQUITY FUTURES & INDICES ---
 st.markdown("### Equity Futures & Indices")
