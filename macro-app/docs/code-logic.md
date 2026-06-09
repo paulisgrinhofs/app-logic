@@ -6,59 +6,73 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 
 ## Architecture
 
-`dashboard.py` is a single-page Streamlit app with 6 sections, each rendered as a horizontal row of fixed-width (160px) metric cards. Data fetched via `yfinance` and `requests`, refreshing every 30 seconds via `st.rerun()`.
+`dashboard.py` is a single-page Streamlit app with 9 sections, each rendered as a horizontal row of fixed-width (160px) metric cards. Data fetched via `yfinance`, `requests`, and FRED JSON API, refreshing every 120 seconds via `st.rerun()`.
 
 ### Key functions
-- `fetch(ticker)` — fetches last price, previous close, delta, % change via yfinance
-- `fetch_put_call()` — fetches CBOE Total Put/Call Ratio via `^PCCR` yfinance ticker (history method)
-- `fetch_fear_greed_cnn()` — fetches CNN stock market Fear & Greed from feargreedchart.com (with User-Agent header)
-- `fetch_fear_greed_crypto()` — fetches crypto Fear & Greed from api.alternative.me/fng/
-- `show_metric(col, label, ticker, help_text)` — renders metric card with delta, % change, tooltip
+
+| Function | Purpose |
+|----------|---------|
+| `fmt_delta(delta, pct)` | Shared delta string formatter. Handles None safely. Returns `+1.2 (+0.5%)` style string or just `+1.2` if pct unavailable. |
+| `fetch(ticker)` | yfinance `fast_info` — last price, previous close, delta, % change |
+| `fetch_ratio(t1, t2)` | Fetches ratio of two tickers (e.g. HYG/TLT, RSP/SPY) with delta vs previous close ratio |
+| `_fetch_fred_raw(series_id)` | Fetches FRED observations via JSON API with API key. Returns list of `(date, float)` tuples, newest last. Cached 1hr. |
+| `_prefetch_slow()` | Runs FRED fetches (ICSA, CPIAUCSL, PAYEMS) in parallel threads before page renders. Writes results to `session_state`. ZQ=F excluded — fetched inline instead (Streamlit blocks session_state writes from threads). |
+| `fetch_fred(series_id, cache_key)` | Latest single value + date. Uses `_fetch_fred_raw`. Cached 1hr. |
+| `fetch_fred_yoy(series_id, cache_key)` | YoY % change: `obs[-1]` vs `obs[-13]`. Used for CPI. Returns `(value, yoy_pct, date)`. Cached 1hr. |
+| `fetch_fred_mom(series_id, cache_key)` | Month-on-month change: `obs[-1]` minus `obs[-2]`. Used for NFP. Returns `(value, mom, date)`. Cached 1hr. |
+| `fetch_put_call()` | CNN F&G API `put_and_call_options.score`. Delta tracked via `session_state['pc_prev']`, n/a on first load. |
+| `fetch_fear_greed_cnn()` | CNN F&G composite score + rating + delta from `fear_and_greed.previous_close` |
+| `fetch_fear_greed_crypto()` | alternative.me crypto F&G, `?limit=2` for today + yesterday delta |
+| `shorten_rating(rating)` | Abbreviates long ratings (Extreme Fear → Ext Fear) to prevent truncation in 160px columns |
+| `show_metric(col, label, ticker, help_text)` | Standard metric card with delta, % change, tooltip |
 
 ---
 
 ## Sections
 
 ### 1. Risk Sentiment
-**Logic ref:** `macro-logic.md` → Inputs → Price/Market, Classification Logic context layer
 
 | Label | Ticker/Source | Type | Notes |
 |-------|--------------|------|-------|
 | VIX | ^VIX | Spot | Fear gauge. Spot used — VIX futures behave differently |
-| DXY | DX-Y.NYB | Spot/cash | Dollar index. `DX=F` futures preferred but not available on yfinance. Small discrepancy vs Finviz which uses `DX=F`. |
-| Put/Call (PCCR) | ^PCCR | yfinance | CBOE Total Put/Call Ratio. Uses `.history(period="2d")` — not `fast_info`. Above 1.0 = bearish hedging. Below 0.7 = complacency. |
-| F&G (Stocks) | feargreedchart.com | Composite | CNN stock market Fear & Greed 0-100. Requires User-Agent header to avoid 403. |
-| F&G (Crypto) | api.alternative.me/fng/ | Composite | **Crypto-specific** — tracks Bitcoin sentiment only, not equity markets. Shown for cross-asset context. |
+| DXY | DX-Y.NYB | Spot/cash | Dollar index. `DX=F` futures preferred but unavailable on yfinance. Small discrepancy vs Finviz. |
+| Put/Call | CNN F&G API `put_and_call_options.score` | Derived | CNN-normalised CBOE ratio 0-100. Delta via session_state. |
+| F&G Stocks | production.dataviz.cnn.io | Composite | CNN equity Fear & Greed. Delta from `previous_close`. Rating abbreviated. |
 
-**Put/Call note:** `^PCCR` is the CBOE Total Put/Call Ratio. Direct scraping of CBOE was blocked (403). This ticker uses yfinance `.history()` which accesses Yahoo's cached data — may lag slightly.
+**F&G Stocks — 7 sub-indicators:**
+1. Market momentum (S&P vs 125-day MA)
+2. Stock price strength (52-week highs vs lows on NYSE)
+3. Stock price breadth (advancing vs declining volume)
+4. Put/Call options (CBOE ratio)
+5. Junk bond demand (spread between high-yield and investment-grade)
+6. Market volatility (VIX vs 50-day MA)
+7. Safe haven demand (stock vs bond returns)
 
-**Fear & Greed note:** CNN endpoint was returning errors without a browser User-Agent header. Added header to fix. Crypto F&G is a separate index (alternative.me) and should not be conflated with the stock market version.
+Contrarian signal at extremes: below 25 = long-term value buyers historically step in. Above 75 = market most vulnerable to pullback.
 
-**Known discrepancy:** DXY shows slightly different value vs Finviz — Finviz uses `DX=F` futures, we use `DX-Y.NYB` spot.
+**Put/Call sourcing:** CBOE scraping blocked (403). yfinance tickers ^PCCR, ^CPC, ^CPCE all return empty. CNN F&G `put_and_call_options` top-level key is the only working free source.
 
 ---
 
 ### 2. Equity Futures & Indices
-**Logic ref:** `macro-logic.md` → Inputs → Price/Market
 
-US indices use futures (captures overnight macro risk). International indices use cash (futures not reliably available on yfinance).
+US indices use futures (24/7, captures overnight risk). International use cash (stale when markets closed).
 
-| Label | Ticker | Type | Notes |
-|-------|--------|------|-------|
-| S&P 500 | ES=F | Futures | US — primary equity risk indicator |
-| NASDAQ | NQ=F | Futures | US — leads tech/growth sentiment |
-| Nikkei | ^N225 | Cash index | Japan. Stale when market closed. |
-| EuroStoxx | ^STOXX50E | Cash index | Europe benchmark. Stale when market closed. |
-| DAX | ^GDAXI | Cash index | Germany — export/China proxy. Stale when market closed. |
-| KOSPI | ^KS11 | Cash index | South Korea. Stale when market closed. |
-| CSI 300 | 000300.SS | Cash index | China domestic economy. Stale when market closed. |
+| Label | Ticker | Type |
+|-------|--------|------|
+| S&P 500 | ES=F | Futures |
+| NASDAQ | NQ=F | Futures |
+| Nikkei | ^N225 | Cash |
+| EuroStoxx | ^STOXX50E | Cash |
+| DAX | ^GDAXI | Cash |
+| KOSPI | ^KS11 | Cash |
+| CSI 300 | 000300.SS | Cash |
 
 ---
 
 ### 3. Rates
-**Logic ref:** `macro-logic.md` → Inputs → Price/Market
 
-All spot yields. Futures not used — spot yields are the pure cost-of-capital baseline.
+All spot yields. Spread (10-2yr) is a calculated field — both yields fetched, previous closes fetched separately for spread delta.
 
 | Label | Ticker | Purpose |
 |-------|--------|---------|
@@ -66,50 +80,94 @@ All spot yields. Futures not used — spot yields are the pure cost-of-capital b
 | 5yr Yield | ^FVX | Mid-curve |
 | 10yr Yield | ^TNX | Global benchmark rate |
 | 30yr Yield | ^TYX | Long-end inflation expectations |
-| Spread (10-2yr) | calculated | Yield curve shape. Negative = inverted = recession signal |
+| Spread (10-2yr) | calculated | Negative = inverted = recession signal. Delta = narrowing (flattening) vs widening (steepening). |
 
 ---
 
-### 4. Commodity Futures
-**Logic ref:** `macro-logic.md` → Inputs → Price/Market
+### 4. Stress & Credit
 
-All futures. Commodity futures show supply/demand structure and are the institutional benchmark.
+| Label | Ticker/Source | Reference levels |
+|-------|--------------|-----------------|
+| MOVE Index | ^MOVE | Normal <80. Elevated 80–100. Stress 100–150. Crisis >150. (COVID peak ~160, 2023 banking crisis ~140) |
+| HYG | HYG | Normal $76–$82. Stress $70–$76. Crisis <$70. (COVID low ~$68, 2022 low ~$70) |
+| JNK | JNK | Normal $92–$100. Stress $85–$92. Crisis <$85. Confirms HYG. |
+| HYG/TLT | fetch_ratio("HYG","TLT") | Direction matters more than level. Sustained decline = credit warning ahead of equities. |
+| TLT | TLT | Inverse of long rates. TLT up + equities down = risk-off. TLT down + equities up = reflation. |
+
+**Why this row matters:** Bond and credit markets price risk before equities. MOVE and HYG/TLT divergences from equity indices are early warning signals for rebalancing vs reversal classification.
+
+---
+
+### 5. Breadth
+
+| Label | Ticker/Source | Notes |
+|-------|--------------|-------|
+| RSP | RSP | Equal-weight S&P 500 ETF |
+| SPY | SPY | Market-cap weighted S&P 500 ETF |
+| RSP/SPY | fetch_ratio("RSP","SPY") | Breadth indicator. Rising = broad participation. Falling = mega-cap driven, fragile rally. |
+
+**How to read RSP/SPY:** If SPY is up but RSP/SPY is falling, the index gain is driven by a handful of large-cap names. The underlying market is weakening.
+
+---
+
+### 6. Macro Data
+
+All FRED data uses the JSON API (`api.stlouisfed.org/fred/series/observations`) with API key `FRED_API_KEY`. Cached in session_state for 1 hour. FRED parallel threads write to session_state before page renders. ZQ=F fetched inline (not in thread) because Streamlit silently blocks session_state writes from background threads.
+
+| Label | Source | Frequency | Reference levels |
+|-------|--------|-----------|-----------------|
+| Fed Funds Implied | ZQ=F (yfinance, inline) | Live | Formula: 100 minus futures price. Compare to FOMC target. Gap = market pricing cuts/hikes. |
+| Jobless Claims | FRED: ICSA | Weekly (Thu 8:30am ET) | Healthy <220k. Normal 220–260k. Elevated 260–300k. Concern 300–400k. Recession signal >400k sustained. |
+| CPI YoY | FRED: CPIAUCSL | Monthly | YoY % via `fetch_fred_yoy()` — obs[-1] vs obs[-13]. Fed target ~2%. Cooling 2–3%. Hot 3–5%. Crisis >6%. |
+| NFP MoM | FRED: PAYEMS | Monthly (first Fri) | `fetch_fred_mom()` — obs[-1] minus obs[-2]. Strong >+250k. Healthy +150–250k. Weak <+50k. Recession = negative. |
+
+---
+
+### 7. Commodity Futures
 
 | Label | Ticker | Purpose |
 |-------|--------|---------|
-| WTI Crude | CL=F | US oil benchmark. Energy sector driver + inflation signal |
-| Brent Crude | BZ=F | Global oil benchmark |
+| WTI Crude | CL=F | US oil benchmark + inflation signal |
+| Brent Crude | BZ=F | Global benchmark |
 | Gold | GC=F | Safe haven / inflation hedge / dollar inverse |
 | Silver | SI=F | Industrial + safe haven hybrid |
 | Copper | HG=F | Global growth leading indicator |
 
 ---
 
-### 5. Crypto
-**Logic ref:** `macro-logic.md` → Inputs → Price/Market
+### 8. Crypto
 
-Spot prices. Price discovery on 24/7 spot exchanges, not CME futures.
-
-| Label | Ticker | Purpose |
-|-------|--------|---------|
+| Label | Ticker/Source | Purpose |
+|-------|--------------|---------|
 | Bitcoin | BTC-USD | Risk-on/off signal + digital gold proxy |
-| Ethereum | ETH-USD | Higher beta crypto, DeFi/tech sentiment |
+| Ethereum | ETH-USD | Higher beta, DeFi/tech sentiment |
+| F&G Crypto | api.alternative.me/fng/?limit=2 | Crypto sentiment only. Delta vs yesterday. Below 10 = capitulation. Above 80 = overheated. |
 
 ---
 
-### 6. Currencies
-**Logic ref:** `macro-logic.md` → Inputs → Price/Market
+### 9. Currencies
 
 | Label | Ticker | Purpose |
 |-------|--------|---------|
 | EUR/USD | EURUSD=X | Euro strength vs dollar |
-| USD/JPY | JPY=X | Yen as safe haven indicator |
+| USD/JPY | JPY=X | Yen safe haven indicator |
 | GBP/USD | GBPUSD=X | UK macro proxy |
-| USD/CNY | USDCNY=X | Yuan strength — China stress indicator |
+| USD/CNY | USDCNY=X | Yuan strength — China stress |
 
 ---
 
 ## Open Items
 - DXY: using spot `DX-Y.NYB` — small discrepancy vs Finviz (`DX=F`). Fix when alternative source found.
-- International equity indices: cash prices, stale when markets closed
-- Refresh rate: 30 seconds
+- International equity indices: cash prices go stale when markets are closed.
+- FRED next release dates: requires FRED release calendar API endpoint. Add when needed.
+- Sector ETF flow row: planned next build. Will need `fetch_with_volume()` for price + volume vs 20-day avg.
+- Events calendar: planned future build. Will consume `release_date` and `next_date` fields.
+- Jobless Claims: shows raw weekly number — 4-week moving average would add more signal. Future improvement.
+
+## Refresh Rate
+- **Current: 120 seconds (2 minutes).** FRED data cached 1hr in session_state — refresh only re-fetches yfinance and CNN calls.
+
+## FRED API
+- Endpoint: `https://api.stlouisfed.org/fred/series/observations?series_id=X&api_key=KEY&file_type=json&sort_order=asc`
+- CSV endpoint (`fred.stlouisfed.org/graph/fredgraph.csv`) times out on user's network — JSON API used instead.
+- API key stored as `FRED_API_KEY` constant in `dashboard.py`.
