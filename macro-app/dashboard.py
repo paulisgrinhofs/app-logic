@@ -59,17 +59,19 @@ def fetch_fred(series_id, cache_key):
         return cache['value'], cache['date'], cache['next_date']
     try:
         url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
-        r = requests.get(url, timeout=8)
-        lines = r.text.strip().split('\n')
-        last = lines[-1].split(',')
-        value, date = last[1].strip(), last[0].strip()
-        # Fetch release calendar for next release date
-        next_date = None
-        cal_url = f"https://api.stlouisfed.org/fred/release/dates?series_id={series_id}&realtime_start=2020-01-01&api_key=&file_type=json"
-        st.session_state[cache_key] = {'value': value, 'date': date, 'next_date': next_date, 'ts': time.time()}
-        return value, date, next_date
+        r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        lines = [l for l in r.text.strip().split('\n') if l and not l.startswith('DATE')]
+        # Find last non-empty observation
+        for line in reversed(lines):
+            parts = line.split(',')
+            if len(parts) >= 2 and parts[1].strip() not in ('', '.'):
+                value, date = parts[1].strip(), parts[0].strip()
+                next_date = None
+                st.session_state[cache_key] = {'value': value, 'date': date, 'next_date': next_date, 'ts': time.time()}
+                return value, date, next_date
     except:
-        return None, None, None
+        pass
+    return None, None, None
 
 RATING_SHORT = {
     "Extreme Fear": "Ext Fear",
@@ -196,26 +198,46 @@ with cols[4]:
 # --- STRESS & CREDIT ---
 st.markdown("### Stress & Credit")
 cols = st.columns(8)
-show_metric(cols[0], "MOVE Index", "^MOVE", "Bond market volatility index (Treasury VIX equivalent). Rising MOVE while VIX is flat = bond market pricing stress equities haven't priced yet. Above 100 = elevated. Above 150 = acute stress.")
-show_metric(cols[1], "HYG", "HYG", "High-yield corporate bond ETF. Falling price = credit stress, risk-off, default risk rising. Leads equity selloffs.")
-show_metric(cols[2], "JNK", "JNK", "High-yield bond ETF (similar to HYG). Second read on credit risk. Divergence between HYG and JNK is rare but significant.")
+show_metric(cols[0], "MOVE Index", "^MOVE",
+    "Bond market volatility (Treasury VIX equivalent). Leads equity vol — rising MOVE with flat VIX = bond market pricing stress equities haven't woken up to yet. "
+    "Normal: <80. Elevated: 80–100. Stress: 100–150. Crisis: >150. (2020 COVID peak: ~160. 2023 banking crisis: ~140).")
+show_metric(cols[1], "HYG", "HYG",
+    "iShares high-yield corporate bond ETF. Falling price = credit stress, default risk rising, risk-off. Leads equity selloffs by days. "
+    "Normal range: $76–$82. Stress: $70–$76. Crisis: <$70. (2020 COVID low: ~$68. 2022 rate shock low: ~$70).")
+show_metric(cols[2], "JNK", "JNK",
+    "SPDR high-yield bond ETF. Similar to HYG but slightly different composition. Use as confirmation — divergence from HYG is rare and significant. "
+    "Normal range: $92–$100. Stress: $85–$92. Crisis: <$85.")
 hyg_tlt, hyg_tlt_delta, hyg_tlt_pct = fetch_ratio("HYG", "TLT")
 with cols[3]:
     if hyg_tlt is not None:
-        st.metric(label="HYG/TLT", value=hyg_tlt, delta=fmt_delta(hyg_tlt_delta, hyg_tlt_pct), help="Ratio of high-yield bonds (HYG) to long-term Treasuries (TLT). Falling = investors fleeing credit risk into safe government bonds = systemic stress. Rising = risk appetite returning. More sensitive to credit stress than raw HYG price.")
+        st.metric(label="HYG/TLT", value=hyg_tlt, delta=fmt_delta(hyg_tlt_delta, hyg_tlt_pct),
+            help="Ratio: high-yield bonds (HYG) ÷ long-term Treasuries (TLT). More sensitive to credit stress than raw HYG price. "
+                 "Rising = risk appetite, investors in credit over safety. Falling = flight to safety, systemic stress. "
+                 "Direction matters more than absolute level. Sustained decline = credit market warning ahead of equities.")
     else:
         st.metric(label="HYG/TLT", value="n/a", help="HYG/TLT ratio — credit vs safe haven demand.")
-show_metric(cols[4], "TLT", "TLT", "20yr+ Treasury bond ETF. Rising = safety bid / rates falling. Falling = rates rising or inflation fears.")
+show_metric(cols[4], "TLT", "TLT",
+    "iShares 20yr+ Treasury bond ETF. Inverse of long rates — rising TLT = rates falling = safety bid or recession fears. Falling TLT = rates rising = inflation/growth. "
+    "Normal range varies with rate cycle. Key: watch direction relative to equities. TLT up + equities down = classic risk-off. TLT down + equities up = reflation trade.")
 
 # --- BREADTH ---
 st.markdown("### Breadth")
 cols = st.columns(8)
-show_metric(cols[0], "RSP", "RSP", "Equal-weight S&P 500 ETF. Each stock has same weight regardless of market cap.")
-show_metric(cols[1], "SPY", "SPY", "Market-cap weighted S&P 500 ETF. Dominated by mega-cap tech.")
+show_metric(cols[0], "RSP", "RSP",
+    "Invesco equal-weight S&P 500 ETF. Each of 500 stocks has identical ~0.2% weight. "
+    "Rising = broad market health. Use alongside SPY to assess participation.")
+show_metric(cols[1], "SPY", "SPY",
+    "SPDR S&P 500 ETF, market-cap weighted. Top 10 stocks = ~35% of index. "
+    "Can rise even if most stocks are flat or falling if mega-caps lead.")
 rsp_spy, rsp_spy_delta, rsp_spy_pct = fetch_ratio("RSP", "SPY")
 with cols[2]:
     if rsp_spy is not None:
-        st.metric(label="RSP/SPY", value=rsp_spy, delta=fmt_delta(rsp_spy_delta, rsp_spy_pct), help="Breadth indicator. Rising = broad market participation, healthy rally. Falling = rally driven by few mega-caps only, narrow and fragile. If SPY is up but RSP/SPY is falling, the index gain is not broad-based.")
+        st.metric(label="RSP/SPY", value=rsp_spy, delta=fmt_delta(rsp_spy_delta, rsp_spy_pct),
+            help="Breadth ratio: equal-weight ÷ cap-weight S&P 500. "
+                 "Rising = rally is broad, most stocks participating = healthy. "
+                 "Falling = rally driven by few mega-caps, narrow and fragile — historically precedes broader weakness. "
+                 "Typical range: 0.26–0.32. Multi-year low ~0.24 (2023 AI concentration peak). "
+                 "Key signal: SPY up + RSP/SPY falling = do not trust the index move.")
     else:
         st.metric(label="RSP/SPY", value="n/a", help="RSP/SPY breadth ratio.")
 
@@ -231,7 +253,11 @@ with cols[0]:
         implied_prev = round(100 - (zq_price - zq_delta), 3) if zq_delta is not None else None
         rate_delta = round(implied_rate - implied_prev, 3) if implied_prev is not None else None
         rate_pct = round((rate_delta / implied_prev) * 100, 2) if (rate_delta and implied_prev) else None
-        st.metric(label="Fed Funds Implied", value=f"{implied_rate}%", delta=fmt_delta(rate_delta, rate_pct), help="Market-implied Fed Funds rate from ZQ=F (30-day futures). Formula: 100 minus futures price. Shows where the market expects the Fed rate to be — shifts overnight = market repricing rate cut/hike expectations.")
+        st.metric(label="Fed Funds Implied", value=f"{implied_rate}%", delta=fmt_delta(rate_delta, rate_pct),
+            help="Market-implied Fed Funds rate from ZQ=F (30-day futures). Formula: 100 minus futures price. "
+                 "Compare to current Fed Funds target (set by FOMC). Gap = market pricing in cuts or hikes. "
+                 "Overnight shift in implied rate = most direct signal that macro catalyst changed rate expectations. "
+                 "Normal: tracks Fed target closely. Diverging lower = market pricing cuts = risk-on signal.")
     else:
         st.metric(label="Fed Funds Implied", value="n/a", help="Implied Fed Funds rate from ZQ=F futures.")
 
@@ -239,25 +265,35 @@ with cols[0]:
 claims_val, claims_date, _ = fetch_fred("ICSA", "fred_icsa")
 with cols[1]:
     if claims_val:
-        st.metric(label="Jobless Claims", value=f"{int(float(claims_val)):,}", delta=claims_date, delta_color="off", help=f"Weekly initial jobless claims (FRED: ICSA). Released every Thursday. Rising = labor market weakening. Above 300k = concern. Last release: {claims_date}. Leading indicator — moves before monthly NFP.")
+        st.metric(label="Jobless Claims", value=f"{int(float(claims_val)):,}", delta=claims_date, delta_color="off",
+            help=f"Weekly initial jobless claims (FRED: ICSA). Released every Thursday 8:30am ET. "
+                 f"Healthy: <220k. Normal: 220–260k. Elevated: 260–300k. Concern: 300–400k. Recession signal: >400k sustained. "
+                 f"(2020 COVID peak: 6.1M. 2023 normal: ~220k). Leading indicator — moves before monthly NFP. Last release: {claims_date}.")
     else:
-        st.metric(label="Jobless Claims", value="n/a", help="Weekly initial jobless claims from FRED.")
+        st.metric(label="Jobless Claims", value="n/a", help="Weekly initial jobless claims from FRED (ICSA).")
 
 # CPI — FRED series CPIAUCSL (monthly)
 cpi_val, cpi_date, _ = fetch_fred("CPIAUCSL", "fred_cpi")
 with cols[2]:
     if cpi_val:
-        st.metric(label="CPI", value=cpi_val, delta=cpi_date, delta_color="off", help=f"Consumer Price Index, all urban consumers (FRED: CPIAUCSL). Monthly release. Index level — check delta for month-on-month change direction. Last release: {cpi_date}.")
+        st.metric(label="CPI", value=cpi_val, delta=cpi_date, delta_color="off",
+            help=f"CPI index level (FRED: CPIAUCSL, all urban consumers). Monthly release. "
+                 f"This shows the index level — the key number is YoY % change (not shown here, calculate externally). "
+                 f"Fed target: ~2% YoY. Hot: >3%. Crisis: >6% (2022 peak: 9.1% YoY). Deflation risk: <0%. Last release: {cpi_date}.")
     else:
-        st.metric(label="CPI", value="n/a", help="CPI from FRED.")
+        st.metric(label="CPI", value="n/a", help="CPI from FRED (CPIAUCSL).")
 
 # NFP — FRED series PAYEMS (monthly, first Friday)
 nfp_val, nfp_date, _ = fetch_fred("PAYEMS", "fred_nfp")
 with cols[3]:
     if nfp_val:
-        st.metric(label="NFP (000s)", value=f"{int(float(nfp_val)):,}", delta=nfp_date, delta_color="off", help=f"Non-Farm Payrolls total employment level (FRED: PAYEMS, thousands). Released first Friday of each month. Last release: {nfp_date}. Rising = labor market strong. Watch month-on-month change, not absolute level.")
+        st.metric(label="NFP (000s)", value=f"{int(float(nfp_val)):,}", delta=nfp_date, delta_color="off",
+            help=f"Non-Farm Payrolls total employment (FRED: PAYEMS, thousands). Released first Friday each month. "
+                 f"This is the cumulative level — watch month-on-month change for signal. "
+                 f"Strong monthly add: >250k. Healthy: 150–250k. Weak: 50–150k. Stalling: <50k. Recession: negative. "
+                 f"(2020 COVID loss: -20M in 2 months. 2022–23 avg: ~250k/month). Last release: {nfp_date}.")
     else:
-        st.metric(label="NFP (000s)", value="n/a", help="Non-Farm Payrolls from FRED.")
+        st.metric(label="NFP (000s)", value="n/a", help="Non-Farm Payrolls from FRED (PAYEMS).")
 
 # --- COMMODITY FUTURES ---
 st.markdown("### Commodity Futures")

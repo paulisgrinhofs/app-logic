@@ -15,7 +15,7 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 | `fmt_delta(delta, pct)` | Shared delta string formatter. Handles None safely. Returns `+1.2 (+0.5%)` style string or just `+1.2` if pct unavailable. |
 | `fetch(ticker)` | yfinance `fast_info` — last price, previous close, delta, % change |
 | `fetch_ratio(t1, t2)` | Fetches ratio of two tickers (e.g. HYG/TLT, RSP/SPY) with delta vs previous close ratio |
-| `fetch_fred(series_id, cache_key)` | FRED CSV endpoint — returns (value, release_date, next_date). Cached in session_state for 1hr to avoid slow repeated calls. No API key required. |
+| `fetch_fred(series_id, cache_key)` | FRED CSV endpoint (`fred.stlouisfed.org/graph/fredgraph.csv`). Returns (value, release_date, next_date). Cached in session_state for 1hr. No API key required. Parser skips header row and empty/`.` observations, iterates from last line backward to find most recent valid value. User-Agent header added to avoid 403. |
 | `fetch_put_call()` | CNN F&G API `put_and_call_options.score`. No previous_close in sub-component — delta tracked via `session_state['pc_prev']`, n/a on first load. |
 | `fetch_fear_greed_cnn()` | CNN F&G composite score + rating + delta from `fear_and_greed.previous_close` |
 | `fetch_fear_greed_crypto()` | alternative.me crypto F&G, `?limit=2` for today + yesterday delta |
@@ -86,13 +86,13 @@ All spot yields. Spread (10-2yr) is a calculated field — both yields fetched, 
 ### 4. Stress & Credit
 **Logic ref:** `macro-logic.md` → Classification Logic — macro catalyst present overnight
 
-| Label | Ticker/Source | Notes |
-|-------|--------------|-------|
-| MOVE Index | ^MOVE | Bond market volatility. Leads equity vol — rising MOVE with flat VIX = hidden stress. Above 100 = elevated. |
-| HYG | HYG | High-yield corporate bond ETF. Falling = credit stress, risk-off. Leads equity selloffs. |
-| JNK | JNK | Second high-yield read. Divergence from HYG is rare but significant. |
-| HYG/TLT | fetch_ratio("HYG","TLT") | Calculated ratio. Falling = flight from credit to safe haven. More sensitive than raw HYG price. |
-| TLT | TLT | 20yr+ Treasury ETF. Rising = safety bid / rates falling. |
+| Label | Ticker/Source | Reference levels |
+|-------|--------------|-----------------|
+| MOVE Index | ^MOVE | Normal <80. Elevated 80–100. Stress 100–150. Crisis >150. (COVID peak ~160, 2023 banking crisis ~140) |
+| HYG | HYG | Normal $76–$82. Stress $70–$76. Crisis <$70. (COVID low ~$68, 2022 low ~$70) |
+| JNK | JNK | Normal $92–$100. Stress $85–$92. Crisis <$85. Confirms HYG. |
+| HYG/TLT | fetch_ratio("HYG","TLT") | Direction matters more than level. Sustained decline = credit warning ahead of equities. |
+| TLT | TLT | Inverse of long rates. TLT up + equities down = risk-off. TLT down + equities up = reflation. |
 
 **Why this row matters:** Bond and credit markets price risk before equities. MOVE and HYG/TLT divergences from equity indices are early warning signals for the rebalancing vs reversal classification.
 
@@ -116,12 +116,12 @@ All spot yields. Spread (10-2yr) is a calculated field — both yields fetched, 
 
 All FRED data uses the free CSV endpoint (`fred.stlouisfed.org/graph/fredgraph.csv?id=SERIES`). No API key required. Cached in session_state for 1 hour.
 
-| Label | FRED Series | Frequency | Notes |
-|-------|------------|-----------|-------|
-| Fed Funds Implied | ZQ=F (yfinance) | Live | 30-day Fed Funds futures. Rate = 100 minus price. Overnight shift = market repricing cut/hike expectations. |
-| Jobless Claims | ICSA | Weekly (Thursdays) | Initial claims. Rising = labor weakening. Above 300k = concern. Leading indicator before monthly NFP. |
-| CPI | CPIAUCSL | Monthly | Index level shown. Watch direction of change. |
-| NFP | PAYEMS | Monthly (first Friday) | Total nonfarm payroll employment in thousands. |
+| Label | Source | Frequency | Reference levels |
+|-------|--------|-----------|-----------------|
+| Fed Funds Implied | ZQ=F (yfinance) | Live | Compare to current FOMC target. Gap = market pricing cuts/hikes. Overnight shift = catalyst changed rate expectations. |
+| Jobless Claims | FRED: ICSA | Weekly (Thu 8:30am ET) | Healthy <220k. Normal 220–260k. Elevated 260–300k. Concern 300–400k. Recession signal >400k sustained. (2020 peak: 6.1M) |
+| CPI | FRED: CPIAUCSL | Monthly | Index level only — YoY % change not calculated here yet. Fed target ~2% YoY. Hot >3%. Crisis >6% (2022 peak: 9.1%). |
+| NFP | FRED: PAYEMS | Monthly (first Fri) | Monthly change is the signal, not absolute level. Strong >250k. Healthy 150–250k. Weak <50k. Recession = negative. |
 
 **Display:** Value shown as main metric. Release date shown as delta label (grey, `delta_color="off"`). Future build: add next release date when FRED release calendar API is integrated.
 
