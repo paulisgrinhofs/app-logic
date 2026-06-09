@@ -33,22 +33,23 @@ def fetch(ticker):
         return None, None, None
 
 def fetch_put_call():
-    try:
-        data = yf.Ticker("^PCCR").history(period="2d")
-        if not data.empty:
-            return round(data['Close'].iloc[-1], 2)
-    except:
-        pass
+    for ticker in ["^PCCR", "^CPC", "^CPCE"]:
+        try:
+            data = yf.Ticker(ticker).history(period="5d")
+            if not data.empty:
+                return round(data['Close'].iloc[-1], 2)
+        except:
+            continue
     return None
 
 def fetch_fear_greed_cnn():
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        url = "https://feargreedchart.com/api/?action=all"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
         r = requests.get(url, timeout=5, headers=headers)
         data = r.json()
-        score = data['fear_greed']['score']
-        rating = data['fear_greed']['rating']
+        score = round(data['fear_and_greed']['score'], 1)
+        rating = data['fear_and_greed']['rating'].replace("_", " ").title()
         return score, rating
     except:
         return None, None
