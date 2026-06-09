@@ -45,27 +45,27 @@ def show_metric(col, label, ticker, help_text):
 st.markdown("### Risk Sentiment")
 cols = st.columns(8)
 show_metric(cols[0], "VIX", "^VIX", "Fear index. Below 15 = calm. 15-25 = caution. Above 25 = fear. Above 30 = panic.")
-show_metric(cols[1], "Dollar Index", "DX-Y.NYB", "USD strength. Rising = risk-off or strong US growth. Falling = risk-on.")
+show_metric(cols[1], "DXY", "DX=F", "USD futures. Rising = risk-off or strong US growth. Falling = risk-on.")
 show_metric(cols[2], "Put/Call", "^PCCE", "Equity put/call ratio. Below 0.7 = complacency. Above 1.0 = fear.")
 
-# --- EQUITY FUTURES ---
-st.markdown("### Equity Futures")
+# --- EQUITY FUTURES & INDICES ---
+st.markdown("### Equity Futures & Indices")
 cols = st.columns(8)
-show_metric(cols[0], "S&P 500", "ES=F", "S&P 500 futures. Trades 24/7, most useful pre-market.")
-show_metric(cols[1], "NASDAQ", "NQ=F", "NASDAQ 100 futures. Leads tech/growth sentiment.")
-show_metric(cols[2], "Nikkei", "^N225", "Japan. Leads Asian session. Sensitive to USD/JPY and global risk.")
-show_metric(cols[3], "EuroStoxx", "^STOXX50E", "Europe benchmark. Sensitive to EUR, ECB policy, energy prices.")
-show_metric(cols[4], "DAX", "^GDAXI", "Germany. Export-heavy, sensitive to China growth and EUR.")
-show_metric(cols[5], "KOSPI", "^KS11", "South Korea. Tech and export bellwether for Asia.")
-show_metric(cols[6], "CSI 300", "000300.SS", "China large cap. Key gauge of Chinese domestic economy.")
+show_metric(cols[0], "S&P 500", "ES=F", "S&P 500 futures (ES=F). Trades 24/7, captures overnight macro risk.")
+show_metric(cols[1], "NASDAQ", "NQ=F", "NASDAQ 100 futures (NQ=F). Leads tech/growth sentiment.")
+show_metric(cols[2], "Nikkei", "^N225", "Japan cash index. Leads Asian session. Sensitive to USD/JPY and global risk.")
+show_metric(cols[3], "EuroStoxx", "^STOXX50E", "Europe cash index. Sensitive to EUR, ECB policy, energy prices.")
+show_metric(cols[4], "DAX", "^GDAXI", "Germany cash index. Export-heavy, sensitive to China growth and EUR.")
+show_metric(cols[5], "KOSPI", "^KS11", "South Korea cash index. Tech and export bellwether for Asia.")
+show_metric(cols[6], "CSI 300", "000300.SS", "China large cap cash index. Key gauge of Chinese domestic economy.")
 
-# --- RATES ---
+# --- RATES (spot) ---
 st.markdown("### Rates")
 cols = st.columns(8)
-show_metric(cols[0], "2yr Yield", "^IRX", "2-year Treasury. Most sensitive to Fed rate expectations.")
-show_metric(cols[1], "5yr Yield", "^FVX", "5-year Treasury. Mid-range rates expectations.")
-show_metric(cols[2], "10yr Yield", "^TNX", "10-year Treasury. Rising = growth/inflation up. Falling = safety bid.")
-show_metric(cols[3], "30yr Yield", "^TYX", "30-year Treasury. Long-end rates. Sensitive to inflation expectations.")
+show_metric(cols[0], "2yr Yield", "^IRX", "2-year Treasury spot yield. Most sensitive to Fed rate expectations.")
+show_metric(cols[1], "5yr Yield", "^FVX", "5-year Treasury spot yield. Mid-range rates expectations.")
+show_metric(cols[2], "10yr Yield", "^TNX", "10-year Treasury spot yield. Rising = growth/inflation up. Falling = safety bid.")
+show_metric(cols[3], "30yr Yield", "^TYX", "30-year Treasury spot yield. Long-end rates. Sensitive to inflation expectations.")
 p10, _, _ = fetch("^TNX")
 p2, _, _ = fetch("^IRX")
 with cols[4]:
@@ -75,20 +75,20 @@ with cols[4]:
     else:
         st.metric(label="Spread (10-2yr)", value="n/a")
 
-# --- COMMODITIES ---
-st.markdown("### Commodities")
+# --- COMMODITY FUTURES ---
+st.markdown("### Commodity Futures")
 cols = st.columns(8)
-show_metric(cols[0], "Crude WTI", "CL=F", "WTI crude oil. US benchmark. Key for Energy sector and inflation.")
-show_metric(cols[1], "Crude Brent", "BZ=F", "Brent crude. Global benchmark. Slightly higher than WTI typically.")
-show_metric(cols[2], "Gold", "GC=F", "Safe haven. Rising = risk-off, inflation hedge, or dollar weakness.")
-show_metric(cols[3], "Silver", "SI=F", "Industrial + safe haven hybrid. Tracks gold but more volatile.")
-show_metric(cols[4], "Copper", "HG=F", "Dr Copper. Leading indicator of global economic health. Rising = growth.")
+show_metric(cols[0], "WTI Crude", "CL=F", "WTI crude futures. US benchmark. Key for Energy sector and inflation.")
+show_metric(cols[1], "Brent Crude", "BZ=F", "Brent crude futures. Global benchmark. Slightly higher than WTI typically.")
+show_metric(cols[2], "Gold", "GC=F", "Gold futures. Safe haven. Rising = risk-off, inflation hedge, or dollar weakness.")
+show_metric(cols[3], "Silver", "SI=F", "Silver futures. Industrial + safe haven hybrid. Tracks gold but more volatile.")
+show_metric(cols[4], "Copper", "HG=F", "Copper futures. Leading indicator of global economic health. Rising = growth.")
 
-# --- CRYPTO ---
+# --- CRYPTO (spot) ---
 st.markdown("### Crypto")
 cols = st.columns(8)
-show_metric(cols[0], "Bitcoin", "BTC-USD", "Risk-on asset. Tracks NASDAQ in risk-off, acts as digital gold in inflation.")
-show_metric(cols[1], "Ethereum", "ETH-USD", "Tracks BTC but higher beta. Sensitive to DeFi and tech sentiment.")
+show_metric(cols[0], "Bitcoin", "BTC-USD", "Spot BTC. Risk-on asset. Tracks NASDAQ in risk-off, digital gold in inflation.")
+show_metric(cols[1], "Ethereum", "ETH-USD", "Spot ETH. Tracks BTC but higher beta. Sensitive to DeFi and tech sentiment.")
 
 # --- CURRENCIES ---
 st.markdown("### Currencies")
