@@ -32,13 +32,33 @@ def fetch(ticker):
     except:
         return None, None, None
 
-def fetch_fear_greed():
+def fetch_put_call():
     try:
+        data = yf.Ticker("^PCCR").history(period="2d")
+        if not data.empty:
+            return round(data['Close'].iloc[-1], 2)
+    except:
+        pass
+    return None
+
+def fetch_fear_greed_cnn():
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         url = "https://feargreedchart.com/api/?action=all"
-        r = requests.get(url, timeout=5)
+        r = requests.get(url, timeout=5, headers=headers)
         data = r.json()
         score = data['fear_greed']['score']
         rating = data['fear_greed']['rating']
+        return score, rating
+    except:
+        return None, None
+
+def fetch_fear_greed_crypto():
+    try:
+        r = requests.get("https://api.alternative.me/fng/", timeout=5)
+        data = r.json()
+        score = int(data['data'][0]['value'])
+        rating = data['data'][0]['value_classification']
         return score, rating
     except:
         return None, None
@@ -57,16 +77,27 @@ st.markdown("### Risk Sentiment")
 cols = st.columns(8)
 show_metric(cols[0], "VIX", "^VIX", "Fear index. Below 15 = calm. 15-25 = caution. Above 25 = fear. Above 30 = panic.")
 show_metric(cols[1], "DXY", "DX-Y.NYB", "USD index (spot). Rising = risk-off or strong US growth. Falling = risk-on.")
-score, rating = fetch_fear_greed()
+
+pc = fetch_put_call()
 with cols[2]:
-    if score:
-        st.metric(
-            label="Fear & Greed",
-            value=f"{score} — {rating}",
-            help="CNN Fear & Greed Index. 0-25 = Extreme Fear. 25-45 = Fear. 45-55 = Neutral. 55-75 = Greed. 75-100 = Extreme Greed."
-        )
+    if pc is not None:
+        st.metric(label="Put/Call (PCCR)", value=pc, help="CBOE Total Put/Call Ratio. Above 1.0 = more puts = bearish hedging. Below 0.7 = complacency. Contrarian: extreme readings often mark turning points.")
     else:
-        st.metric(label="Fear & Greed", value="n/a", help="CNN Fear & Greed Index 0-100.")
+        st.metric(label="Put/Call (PCCR)", value="n/a", help="CBOE Total Put/Call Ratio.")
+
+cnn_score, cnn_rating = fetch_fear_greed_cnn()
+with cols[3]:
+    if cnn_score:
+        st.metric(label="F&G (Stocks)", value=f"{cnn_score} — {cnn_rating}", help="CNN Fear & Greed Index (equity markets). 0-25 = Extreme Fear. 25-45 = Fear. 45-55 = Neutral. 55-75 = Greed. 75-100 = Extreme Greed.")
+    else:
+        st.metric(label="F&G (Stocks)", value="n/a", help="CNN Fear & Greed Index for equity markets.")
+
+crypto_score, crypto_rating = fetch_fear_greed_crypto()
+with cols[4]:
+    if crypto_score:
+        st.metric(label="F&G (Crypto)", value=f"{crypto_score} — {crypto_rating}", help="Alternative.me Crypto Fear & Greed Index. Tracks Bitcoin/crypto sentiment only — not equity markets.")
+    else:
+        st.metric(label="F&G (Crypto)", value="n/a", help="Alternative.me Crypto Fear & Greed Index.")
 
 # --- EQUITY FUTURES & INDICES ---
 st.markdown("### Equity Futures & Indices")

@@ -10,7 +10,9 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 
 ### Key functions
 - `fetch(ticker)` — fetches last price, previous close, delta, % change via yfinance
-- `fetch_fear_greed()` — fetches Fear & Greed score and rating from feargreedchart.com free API
+- `fetch_put_call()` — fetches CBOE Total Put/Call Ratio via `^PCCR` yfinance ticker (history method)
+- `fetch_fear_greed_cnn()` — fetches CNN stock market Fear & Greed from feargreedchart.com (with User-Agent header)
+- `fetch_fear_greed_crypto()` — fetches crypto Fear & Greed from api.alternative.me/fng/
 - `show_metric(col, label, ticker, help_text)` — renders metric card with delta, % change, tooltip
 
 ---
@@ -24,10 +26,13 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 |-------|--------------|------|-------|
 | VIX | ^VIX | Spot | Fear gauge. Spot used — VIX futures behave differently |
 | DXY | DX-Y.NYB | Spot/cash | Dollar index. `DX=F` futures preferred but not available on yfinance. Small discrepancy vs Finviz which uses `DX=F`. |
-| Fear & Greed | feargreedchart.com API | Composite | Replaced Put/Call. CNN Fear & Greed 0-100 composite score. More informative than raw put/call ratio. |
+| Put/Call (PCCR) | ^PCCR | yfinance | CBOE Total Put/Call Ratio. Uses `.history(period="2d")` — not `fast_info`. Above 1.0 = bearish hedging. Below 0.7 = complacency. |
+| F&G (Stocks) | feargreedchart.com | Composite | CNN stock market Fear & Greed 0-100. Requires User-Agent header to avoid 403. |
+| F&G (Crypto) | api.alternative.me/fng/ | Composite | **Crypto-specific** — tracks Bitcoin sentiment only, not equity markets. Shown for cross-asset context. |
 
-**Why Fear & Greed instead of Put/Call:**
-CBOE blocks all programmatic access (403). Fear & Greed incorporates put/call as one of its 7 inputs alongside momentum, breadth, safe haven demand, junk bond spread, market volatility, and stock price strength. More complete sentiment picture.
+**Put/Call note:** `^PCCR` is the CBOE Total Put/Call Ratio. Direct scraping of CBOE was blocked (403). This ticker uses yfinance `.history()` which accesses Yahoo's cached data — may lag slightly.
+
+**Fear & Greed note:** CNN endpoint was returning errors without a browser User-Agent header. Added header to fix. Crypto F&G is a separate index (alternative.me) and should not be conflated with the stock market version.
 
 **Known discrepancy:** DXY shows slightly different value vs Finviz — Finviz uses `DX=F` futures, we use `DX-Y.NYB` spot.
 
