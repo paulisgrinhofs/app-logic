@@ -3,6 +3,24 @@ import yfinance as yf
 import requests
 import time
 import threading
+import json
+import os
+
+_PC_PREV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".pc_prev.json")
+
+def _load_pc_prev():
+    try:
+        with open(_PC_PREV_FILE) as f:
+            return json.load(f).get("score")
+    except:
+        return None
+
+def _save_pc_prev(score):
+    try:
+        with open(_PC_PREV_FILE, "w") as f:
+            json.dump({"score": score}, f)
+    except:
+        pass
 
 st.set_page_config(layout="wide")
 st.title("Macro Dashboard")
@@ -167,8 +185,8 @@ def fetch_put_call():
             score = block.get('score')
             if score is not None:
                 score = round(float(score), 1)
-                prev = st.session_state.get('pc_prev')
-                st.session_state['pc_prev'] = score
+                prev = _load_pc_prev()
+                _save_pc_prev(score)
                 delta = round(score - prev, 1) if prev is not None else None
                 pct = round((delta / prev) * 100, 1) if (delta is not None and prev) else None
                 return score, delta, pct
