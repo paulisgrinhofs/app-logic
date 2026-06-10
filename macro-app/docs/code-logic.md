@@ -20,7 +20,9 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 | `fetch_fred(series_id, cache_key)` | Latest single value + date. Uses `_fetch_fred_raw`. Cached 1hr. |
 | `fetch_fred_yoy(series_id, cache_key)` | YoY % change: `obs[-1]` vs `obs[-13]`. Used for CPI. Returns `(value, yoy_pct, date)`. Cached 1hr. |
 | `fetch_fred_mom(series_id, cache_key)` | Month-on-month change: `obs[-1]` minus `obs[-2]`. Used for NFP. Returns `(value, mom, date)`. Cached 1hr. |
-| `fetch_put_call()` | CNN F&G API `put_and_call_options.score`. Delta tracked via `session_state['pc_prev']`, n/a on first load. |
+| `fetch_put_call()` | CNN F&G API `put_and_call_options.score`. Delta persisted to `.pc_prev.json` on disk — survives Streamlit restarts. Compares current score to last known value. |
+| `_load_pc_prev()` | Reads previous Put/Call score from `.pc_prev.json`. Returns None if file missing (first run). |
+| `_save_pc_prev(score)` | Writes current Put/Call score to `.pc_prev.json` after each fetch. |
 | `fetch_fear_greed_cnn()` | CNN F&G composite score + rating + delta from `fear_and_greed.previous_close` |
 | `fetch_fear_greed_crypto()` | alternative.me crypto F&G, `?limit=2` for today + yesterday delta |
 | `shorten_rating(rating)` | Abbreviates long ratings (Extreme Fear → Ext Fear) to prevent truncation in 160px columns |
@@ -36,7 +38,7 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 |-------|--------------|------|-------|
 | VIX | ^VIX | Spot | Fear gauge. Spot used — VIX futures behave differently |
 | DXY | DX-Y.NYB | Spot/cash | Dollar index. `DX=F` futures preferred but unavailable on yfinance. Small discrepancy vs Finviz. |
-| Put/Call | CNN F&G API `put_and_call_options.score` | Derived | CNN-normalised CBOE ratio 0-100. Delta via session_state. |
+| Put/Call | CNN F&G API `put_and_call_options.score` | Derived | CNN-normalised CBOE ratio 0-100. Delta vs last known value, persisted to disk across restarts. |
 | F&G Stocks | production.dataviz.cnn.io | Composite | CNN equity Fear & Greed. Delta from `previous_close`. Rating abbreviated. |
 
 **F&G Stocks — 7 sub-indicators:**
