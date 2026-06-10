@@ -3,6 +3,24 @@ import yfinance as yf
 import requests
 import time
 import threading
+import json
+import os
+
+_PC_PREV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".pc_prev.json")
+
+def _load_pc_prev():
+    try:
+        with open(_PC_PREV_FILE) as f:
+            return json.load(f).get("score")
+    except:
+        return None
+
+def _save_pc_prev(score):
+    try:
+        with open(_PC_PREV_FILE, "w") as f:
+            json.dump({"score": score}, f)
+    except:
+        pass
 
 st.set_page_config(layout="wide")
 st.title("Macro Dashboard")
@@ -66,13 +84,17 @@ def _parse_fred_csv(text):
                 continue
     return obs
 
+FRED_API_KEY = "eb55d58a724483b7bc037fa215b29dbf"
+
 def _fetch_fred_raw(series_id):
-    headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
     try:
-        r = requests.get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}",
-                         timeout=8, headers=headers)
-        if r.status_code == 200 and ',' in r.text:
-            return _parse_fred_csv(r.text)
+        url = (f"https://api.stlouisfed.org/fred/series/observations"
+               f"?series_id={series_id}&api_key={FRED_API_KEY}&file_type=json&sort_order=asc")
+        r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+        if r.status_code == 200:
+            return [(o['date'], float(o['value']))
+                    for o in r.json().get('observations', [])
+                    if o['value'] not in ('.', '')]
     except:
         pass
     return []
@@ -94,23 +116,10 @@ def _prefetch_slow():
             mom = round(obs[-1][1] - obs[-2][1], 1)
             st.session_state[cache_key] = {'value': obs[-1][1], 'mom': mom, 'date': obs[-1][0], 'ts': time.time()}
 
-    def _zq():
-        cache_key = 'zq_cache'
-        if st.session_state.get(cache_key) and time.time() - st.session_state[cache_key]['ts'] < 120:
-            return
-        try:
-            data = yf.Ticker("ZQ=F")
-            price = round(data.fast_info['last_price'], 3)
-            prev = round(data.fast_info['previous_close'], 3)
-            st.session_state[cache_key] = {'price': price, 'prev': prev, 'ts': time.time()}
-        except:
-            pass
-
     threads = [
         threading.Thread(target=_fred, args=("ICSA", "fred_icsa", "single")),
         threading.Thread(target=_fred, args=("CPIAUCSL", "fred_cpi", "yoy")),
         threading.Thread(target=_fred, args=("PAYEMS", "fred_nfp", "mom")),
-        threading.Thread(target=_zq),
     ]
     for t in threads:
         t.daemon = True
@@ -176,8 +185,8 @@ def fetch_put_call():
             score = block.get('score')
             if score is not None:
                 score = round(float(score), 1)
-                prev = st.session_state.get('pc_prev')
-                st.session_state['pc_prev'] = score
+                prev = _load_pc_prev()
+                _save_pc_prev(score)
                 delta = round(score - prev, 1) if prev is not None else None
                 pct = round((delta / prev) * 100, 1) if (delta is not None and prev) else None
                 return score, delta, pct
@@ -327,10 +336,17 @@ with cols[2]:
 st.markdown("### Macro Data")
 cols = st.columns(8)
 
-# Fed Funds implied rate — read from prefetch cache
-zq_cache = st.session_state.get('zq_cache', {})
-zq_price = zq_cache.get('price')
-zq_prev = zq_cache.get('prev')
+# Fed Funds implied rate — ZQ=F fetched inline (fast_info, ~0.3s)
+zq_price, zq_prev = None, None
+try:
+    fi = yf.Ticker("ZQ=F").fast_info
+    p = fi['last_price']
+    pv = fi['previous_close']
+    if p is not None and pv is not None:
+        zq_price = round(float(p), 3)
+        zq_prev = round(float(pv), 3)
+except:
+    pass
 with cols[0]:
     if zq_price is not None:
         implied_rate = round(100 - zq_price, 3)
