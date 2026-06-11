@@ -451,7 +451,7 @@ show_metric(cols[1], "Brent Crude", "BZ=F", "Brent crude futures. Global benchma
 show_metric(cols[2], "Gold", "GC=F", "Gold futures. Safe haven. Rising = risk-off, inflation hedge, or dollar weakness.")
 show_metric(cols[3], "Silver", "SI=F", "Silver futures. Industrial + safe haven hybrid. Tracks gold but more volatile.")
 show_metric(cols[4], "Copper", "HG=F", "Copper futures. Leading indicator of global economic health. Rising = growth.")
-show_metric(cols[5], "Aluminium", "ALI=F", "Aluminium futures (COMEX). Industrial metal — sensitive to manufacturing, construction, and China demand. Rising = global growth. Normal: $0.90–$1.20/lb. Elevated: >$1.20.")
+show_metric(cols[5], "Aluminium", "ALI=F", "Aluminium futures (COMEX). Industrial metal — sensitive to manufacturing, construction, and China demand. Rising = global growth. Price in $/metric tonne. Normal: $2,000–$2,650/t. Elevated: >$2,650/t.")
 u_price, u_prev, u_date = fetch_uranium()
 with cols[6]:
     if u_price is not None:
