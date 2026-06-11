@@ -228,3 +228,4 @@ CNN API provides `previous_close` for composite F&G but NOT for `put_and_call_op
 | 2026-06-11 | Uranium added to FRED prefetch threads (PURANUSDM); delta = month-on-month |
 | 2026-06-11 | Added Aluminium (ALI=F) to commodities between Copper and Uranium |
 | 2026-06-11 | Fixed Python 3.14 asyncio crash — replaced time.sleep+st.rerun() with streamlit-autorefresh (JS-based interval, no event loop conflict) |
+| 2026-06-11 | Known issue: git pull does not restore .daily_cache.json if dashboard has modified it locally. Workaround: run `git checkout macro-app/.daily_cache.json && git pull` before starting dashboard to restore prev reference values. |
