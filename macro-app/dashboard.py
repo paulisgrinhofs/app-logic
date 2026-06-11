@@ -280,13 +280,13 @@ def show_metric(col, label, ticker, help_text):
 # --- RISK SENTIMENT ---
 st.markdown("### Risk Sentiment")
 cols = st.columns(8)
-show_metric(cols[0], "VIX", "^VIX", "Fear index. Below 15 = calm. 15-25 = caution. Above 25 = fear. Above 30 = panic.")
-show_metric(cols[1], "DXY", "DX-Y.NYB", "USD index (spot). Rising = risk-off or strong US growth. Falling = risk-on.")
+show_metric(cols[0], "VIX", "^VIX", "Fear index. Below 15 = calm. 15-25 = caution. Above 25 = fear. Above 30 = panic. TW: TVC:VIX")
+show_metric(cols[1], "DXY", "DX-Y.NYB", "USD index (spot). Rising = risk-off or strong US growth. Falling = risk-on. TW: TVC:DXY")
 
 pc, pc_delta, pc_pct = fetch_put_call()
 with cols[2]:
     if pc is not None:
-        st.metric(label="Put/Call", value=pc, delta=fmt_delta(pc_delta, pc_pct), help="CNN-normalised Put/Call ratio (0-100 scale). Source: CBOE options data via CNN F&G API. Higher = more calls vs puts = bullish. Lower = more puts vs calls = bearish hedging. Contrarian: extremes often mark turning points. Change = vs previous close.")
+        st.metric(label="Put/Call", value=pc, delta=fmt_delta(pc_delta, pc_pct), help="CNN-normalised Put/Call ratio (0-100 scale). Source: CBOE options data via CNN F&G API. Higher = more calls vs puts = bullish. Lower = more puts vs calls = bearish hedging. Contrarian: extremes often mark turning points. Change = vs previous close. TW: CBOE:PCC")
     else:
         st.metric(label="Put/Call", value="n/a", help="Put/Call Ratio — sourced from CNN F&G API sub-components.")
 
@@ -301,21 +301,21 @@ with cols[3]:
 # --- EQUITY FUTURES & INDICES ---
 st.markdown("### Equity Futures & Indices")
 cols = st.columns(8)
-show_metric(cols[0], "S&P 500", "^GSPC", "S&P 500 cash index (^GSPC). % change vs yesterday's official 4pm close — matches what Bloomberg/Finviz report. Goes stale outside market hours.")
-show_metric(cols[1], "NASDAQ 100", "^NDX", "NASDAQ 100 cash index (^NDX). % change vs yesterday's official close. Futures (NQ=F) were used previously but their % change was misleading — measured vs futures settlement, not cash close.")
-show_metric(cols[2], "Nikkei", "^N225", "Japan cash index. Leads Asian session. Sensitive to USD/JPY and global risk.")
-show_metric(cols[3], "EuroStoxx", "^STOXX50E", "Europe cash index. Sensitive to EUR, ECB policy, energy prices.")
-show_metric(cols[4], "DAX", "^GDAXI", "Germany cash index. Export-heavy, sensitive to China growth and EUR.")
-show_metric(cols[5], "KOSPI", "^KS11", "South Korea cash index. Tech and export bellwether for Asia.")
-show_metric(cols[6], "CSI 300", "000300.SS", "China large cap cash index. Key gauge of Chinese domestic economy.")
+show_metric(cols[0], "S&P 500", "^GSPC", "S&P 500 cash index. % change vs yesterday's 4pm close. TW: SP:SPX")
+show_metric(cols[1], "NASDAQ 100", "^NDX", "NASDAQ 100 cash index. % change vs yesterday's close. TW: NASDAQ:NDX")
+show_metric(cols[2], "Nikkei", "^N225", "Japan cash index. Leads Asian session. Sensitive to USD/JPY and global risk. TW: TVC:NI225")
+show_metric(cols[3], "EuroStoxx", "^STOXX50E", "Europe cash index. Sensitive to EUR, ECB policy, energy prices. TW: TVC:SX5E")
+show_metric(cols[4], "DAX", "^GDAXI", "Germany cash index. Export-heavy, sensitive to China growth and EUR. TW: XETR:DAX")
+show_metric(cols[5], "KOSPI", "^KS11", "South Korea cash index. Tech and export bellwether for Asia. TW: KRX:KOSPI")
+show_metric(cols[6], "CSI 300", "000300.SS", "China large cap cash index. Key gauge of Chinese domestic economy. TW: SSE:000300")
 
 # --- RATES ---
 st.markdown("### Rates")
 cols = st.columns(8)
-show_metric(cols[0], "2yr Yield", "^IRX", "2-year Treasury spot yield. Most sensitive to Fed rate expectations.")
-show_metric(cols[1], "5yr Yield", "^FVX", "5-year Treasury spot yield. Mid-range rates expectations.")
-show_metric(cols[2], "10yr Yield", "^TNX", "10-year Treasury spot yield. Rising = growth/inflation up. Falling = safety bid.")
-show_metric(cols[3], "30yr Yield", "^TYX", "30-year Treasury spot yield. Long-end rates. Sensitive to inflation expectations.")
+show_metric(cols[0], "2yr Yield", "^IRX", "2-year Treasury spot yield. Most sensitive to Fed rate expectations. TW: TVC:US02Y")
+show_metric(cols[1], "5yr Yield", "^FVX", "5-year Treasury spot yield. Mid-range rates expectations. TW: TVC:US05Y")
+show_metric(cols[2], "10yr Yield", "^TNX", "10-year Treasury spot yield. Rising = growth/inflation up. Falling = safety bid. TW: TVC:US10Y")
+show_metric(cols[3], "30yr Yield", "^TYX", "30-year Treasury spot yield. Long-end rates. Sensitive to inflation expectations. TW: TVC:US30Y")
 p10, _, _ = fetch("^TNX")
 p2, _, _ = fetch("^IRX")
 p10_prev = round(yf.Ticker("^TNX").fast_info['previous_close'], 2) if p10 else None
@@ -338,13 +338,13 @@ st.markdown("### Stress & Credit")
 cols = st.columns(8)
 show_metric(cols[0], "MOVE Index", "^MOVE",
     "Bond market volatility (Treasury VIX equivalent). Leads equity vol — rising MOVE with flat VIX = bond market pricing stress equities haven't woken up to yet. "
-    "Normal: <80. Elevated: 80–100. Stress: 100–150. Crisis: >150. (2020 COVID peak: ~160. 2023 banking crisis: ~140).")
+    "Normal: <80. Elevated: 80–100. Stress: 100–150. Crisis: >150. (2020 COVID peak: ~160. 2023 banking crisis: ~140). TW: TVC:MOVE")
 show_metric(cols[1], "HYG", "HYG",
     "iShares high-yield corporate bond ETF. Falling price = credit stress, default risk rising, risk-off. Leads equity selloffs by days. "
-    "Normal range: $76–$82. Stress: $70–$76. Crisis: <$70. (2020 COVID low: ~$68. 2022 rate shock low: ~$70).")
+    "Normal range: $76–$82. Stress: $70–$76. Crisis: <$70. (2020 COVID low: ~$68. 2022 rate shock low: ~$70). TW: AMEX:HYG")
 show_metric(cols[2], "JNK", "JNK",
     "SPDR high-yield bond ETF. Similar to HYG but slightly different composition. Use as confirmation — divergence from HYG is rare and significant. "
-    "Normal range: $92–$100. Stress: $85–$92. Crisis: <$85.")
+    "Normal range: $92–$100. Stress: $85–$92. Crisis: <$85. TW: AMEX:JNK")
 hyg_tlt, hyg_tlt_delta, hyg_tlt_pct = fetch_ratio("HYG", "TLT")
 with cols[3]:
     if hyg_tlt is not None:
@@ -356,17 +356,17 @@ with cols[3]:
         st.metric(label="HYG/TLT", value="n/a", help="HYG/TLT ratio — credit vs safe haven demand.")
 show_metric(cols[4], "TLT", "TLT",
     "iShares 20yr+ Treasury bond ETF. Inverse of long rates — rising TLT = rates falling = safety bid or recession fears. Falling TLT = rates rising = inflation/growth. "
-    "Normal range varies with rate cycle. Key: watch direction relative to equities. TLT up + equities down = classic risk-off. TLT down + equities up = reflation trade.")
+    "Normal range varies with rate cycle. Key: watch direction relative to equities. TLT up + equities down = classic risk-off. TLT down + equities up = reflation trade. TW: AMEX:TLT")
 
 # --- BREADTH ---
 st.markdown("### Breadth")
 cols = st.columns(8)
 show_metric(cols[0], "RSP", "RSP",
     "Invesco equal-weight S&P 500 ETF. Each of 500 stocks has identical ~0.2% weight. "
-    "Rising = broad market health. Use alongside SPY to assess participation.")
+    "Rising = broad market health. Use alongside SPY to assess participation. TW: AMEX:RSP")
 show_metric(cols[1], "SPY", "SPY",
     "SPDR S&P 500 ETF, market-cap weighted. Top 10 stocks = ~35% of index. "
-    "Can rise even if most stocks are flat or falling if mega-caps lead.")
+    "Can rise even if most stocks are flat or falling if mega-caps lead. TW: AMEX:SPY")
 rsp_spy, rsp_spy_delta, rsp_spy_pct = fetch_ratio("RSP", "SPY")
 with cols[2]:
     if rsp_spy is not None:
@@ -404,7 +404,7 @@ with cols[0]:
             help="Market-implied Fed Funds rate from ZQ=F (30-day futures). Formula: 100 minus futures price. "
                  "Compare to current Fed Funds target (set by FOMC). Gap = market pricing in cuts or hikes. "
                  "Overnight shift in implied rate = most direct signal that macro catalyst changed rate expectations. "
-                 "Normal: tracks Fed target closely. Diverging lower = market pricing cuts = risk-on signal.")
+                 "Normal: tracks Fed target closely. Diverging lower = market pricing cuts = risk-on signal. TW: CBOT:ZQ1!")
     else:
         st.metric(label="Fed Funds Implied", value="n/a", help="Implied Fed Funds rate from ZQ=F futures.")
 
@@ -446,12 +446,12 @@ with cols[3]:
 # --- COMMODITY FUTURES ---
 st.markdown("### Commodity Futures")
 cols = st.columns(8)
-show_metric(cols[0], "WTI Crude", "CL=F", "WTI crude futures. US benchmark. Key for Energy sector and inflation.")
-show_metric(cols[1], "Brent Crude", "BZ=F", "Brent crude futures. Global benchmark. Slightly higher than WTI typically.")
-show_metric(cols[2], "Gold", "GC=F", "Gold futures. Safe haven. Rising = risk-off, inflation hedge, or dollar weakness.")
-show_metric(cols[3], "Silver", "SI=F", "Silver futures. Industrial + safe haven hybrid. Tracks gold but more volatile.")
-show_metric(cols[4], "Copper", "HG=F", "Copper futures. Leading indicator of global economic health. Rising = growth.")
-show_metric(cols[5], "Aluminium", "ALI=F", "Aluminium futures (COMEX). Industrial metal — sensitive to manufacturing, construction, and China demand. Rising = global growth. Price in $/metric tonne. Normal: $2,000–$2,650/t. Elevated: >$2,650/t.")
+show_metric(cols[0], "WTI Crude", "CL=F", "WTI crude futures. US benchmark. Key for Energy sector and inflation. TW: NYMEX:CL1!")
+show_metric(cols[1], "Brent Crude", "BZ=F", "Brent crude futures. Global benchmark. Slightly higher than WTI typically. TW: TVC:UKOIL")
+show_metric(cols[2], "Gold", "GC=F", "Gold futures. Safe haven. Rising = risk-off, inflation hedge, or dollar weakness. TW: COMEX:GC1!")
+show_metric(cols[3], "Silver", "SI=F", "Silver futures. Industrial + safe haven hybrid. Tracks gold but more volatile. TW: COMEX:SI1!")
+show_metric(cols[4], "Copper", "HG=F", "Copper futures (COMEX). Leading indicator of global economic health. Price in $/lb. Normal: $3.50–$4.50/lb. Elevated: >$4.50/lb. Rising = global growth. TW: COMEX:HG1!")
+show_metric(cols[5], "Aluminium", "ALI=F", "Aluminium futures (COMEX). Industrial metal — sensitive to manufacturing, construction, and China demand. Price in $/metric tonne. Normal: $2,000–$2,650/t. Elevated: >$2,650/t. Rising = global growth. TW: COMEX:ALI1!")
 u_price, u_prev, u_date = fetch_uranium()
 with cols[6]:
     if u_price is not None:
@@ -469,8 +469,8 @@ with cols[6]:
 # --- CRYPTO ---
 st.markdown("### Crypto")
 cols = st.columns(8)
-show_metric(cols[0], "Bitcoin", "BTC-USD", "Spot BTC. Risk-on asset. Tracks NASDAQ in risk-off, digital gold in inflation.")
-show_metric(cols[1], "Ethereum", "ETH-USD", "Spot ETH. Tracks BTC but higher beta. Sensitive to DeFi and tech sentiment.")
+show_metric(cols[0], "Bitcoin", "BTC-USD", "Spot BTC. Risk-on asset. Tracks NASDAQ in risk-off, digital gold in inflation. TW: BITSTAMP:BTCUSD")
+show_metric(cols[1], "Ethereum", "ETH-USD", "Spot ETH. Tracks BTC but higher beta. Sensitive to DeFi and tech sentiment. TW: BITSTAMP:ETHUSD")
 crypto_score, crypto_rating, crypto_delta, crypto_pct = fetch_fear_greed_crypto()
 with cols[2]:
     if crypto_score is not None:
@@ -482,9 +482,9 @@ with cols[2]:
 # --- CURRENCIES ---
 st.markdown("### Currencies")
 cols = st.columns(8)
-show_metric(cols[0], "EUR/USD", "EURUSD=X", "Euro vs Dollar. Falling = dollar strength / risk-off.")
-show_metric(cols[1], "USD/JPY", "JPY=X", "Dollar vs Yen. Rising = risk-on. Falling Yen = safe haven bid.")
-show_metric(cols[2], "GBP/USD", "GBPUSD=X", "Pound vs Dollar. Sensitive to UK macro and global risk appetite.")
-show_metric(cols[3], "USD/CNY", "USDCNY=X", "Dollar vs Yuan. Rising = yuan weakening, often signals China stress.")
+show_metric(cols[0], "EUR/USD", "EURUSD=X", "Euro vs Dollar. Falling = dollar strength / risk-off. TW: FX:EURUSD")
+show_metric(cols[1], "USD/JPY", "JPY=X", "Dollar vs Yen. Rising = risk-on. Falling = safe haven bid. TW: FX:USDJPY")
+show_metric(cols[2], "GBP/USD", "GBPUSD=X", "Pound vs Dollar. Sensitive to UK macro and global risk appetite. TW: FX:GBPUSD")
+show_metric(cols[3], "USD/CNY", "USDCNY=X", "Dollar vs Yuan. Rising = yuan weakening, often signals China stress. TW: FX:USDCNH")
 
 st_autorefresh(interval=120000, key="dashboard_refresh")
