@@ -525,8 +525,4 @@ show_metric(cols[1], "USD/JPY", "JPY=X", "Dollar vs Yen. Rising = risk-on. Falli
 show_metric(cols[2], "GBP/USD", "GBPUSD=X", "Pound vs Dollar. Sensitive to UK macro and global risk appetite.")
 show_metric(cols[3], "USD/CNY", "USDCNY=X", "Dollar vs Yuan. Rising = yuan weakening, often signals China stress.")
 
-time.sleep(120)
-try:
-    st.rerun()
-except Exception:
-    pass
+st.markdown('<meta http-equiv="refresh" content="120">', unsafe_allow_html=True)
