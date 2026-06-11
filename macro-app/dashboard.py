@@ -12,8 +12,9 @@ def _load_pc_prev():
     try:
         with open(_PC_PREV_FILE) as f:
             data = json.load(f)
-            # Only use as reference if saved more than 30 min ago
-            if time.time() - data.get("ts", 0) > 1800:
+            today = time.strftime("%Y-%m-%d")
+            # Only use if saved on a previous calendar day
+            if data.get("date") != today:
                 return data.get("score")
     except:
         pass
@@ -21,16 +22,17 @@ def _load_pc_prev():
 
 def _save_pc_prev(score):
     try:
-        # Only save if no recent save exists (don't overwrite within 30 min)
+        today = time.strftime("%Y-%m-%d")
         try:
             with open(_PC_PREV_FILE) as f:
                 data = json.load(f)
-                if time.time() - data.get("ts", 0) < 1800:
+                # Already saved today — don't overwrite
+                if data.get("date") == today:
                     return
         except:
             pass
         with open(_PC_PREV_FILE, "w") as f:
-            json.dump({"score": score, "ts": time.time()}, f)
+            json.dump({"score": score, "date": today}, f)
     except:
         pass
 
