@@ -11,14 +11,26 @@ _PC_PREV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".pc_pr
 def _load_pc_prev():
     try:
         with open(_PC_PREV_FILE) as f:
-            return json.load(f).get("score")
+            data = json.load(f)
+            # Only use as reference if saved more than 30 min ago
+            if time.time() - data.get("ts", 0) > 1800:
+                return data.get("score")
     except:
-        return None
+        pass
+    return None
 
 def _save_pc_prev(score):
     try:
+        # Only save if no recent save exists (don't overwrite within 30 min)
+        try:
+            with open(_PC_PREV_FILE) as f:
+                data = json.load(f)
+                if time.time() - data.get("ts", 0) < 1800:
+                    return
+        except:
+            pass
         with open(_PC_PREV_FILE, "w") as f:
-            json.dump({"score": score}, f)
+            json.dump({"score": score, "ts": time.time()}, f)
     except:
         pass
 
