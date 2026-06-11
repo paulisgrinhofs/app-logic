@@ -138,7 +138,8 @@ All FRED data uses the JSON API (`api.stlouisfed.org/fred/series/observations`) 
 | Brent Crude | BZ=F | Global benchmark |
 | Gold | GC=F | Safe haven / inflation hedge / dollar inverse |
 | Silver | SI=F | Industrial + safe haven hybrid |
-| Copper | HG=F | Global growth leading indicator |
+| Copper | HG=F | Global growth leading indicator. Rising = expansion. Falling = slowdown signal. |
+| Aluminium | ALI=F | COMEX aluminium futures. Industrial metal — manufacturing, construction, China demand proxy. Normal: $0.90–$1.20/lb. |
 | Uranium | FRED: PURANUSDM | World Bank global uranium spot benchmark ($/lb U₃O₈). Monthly. Delta = month-on-month. Normal: $40–$65. Elevated: $65–$100. Crisis: >$100 (2024 peak ~$106). Nasdaq Data Link CHRIS/CME_UX1 blocked — requires paid subscription. |
 
 ---
@@ -177,10 +178,11 @@ All FRED data uses the JSON API (`api.stlouisfed.org/fred/series/observations`) 
 - **Current: 120 seconds (2 minutes).** FRED data cached 1hr in session_state — refresh only re-fetches yfinance and CNN calls.
 
 ## Nasdaq Data Link API
-- Key stored as `NASDAQ_DATA_LINK_KEY` constant in `dashboard.py` — reserved for future use.
-- **Free tier includes:** equities (WIKI, EOD) and some economic data. Does NOT include CME/NYMEX futures.
-- **CHRIS database (CME continuous futures) requires paid subscription** — confirmed blocked at account level via Imperva/Incapsula. UX1! uranium futures unavailable on free tier.
-- Currently unused in dashboard — uranium switched to FRED PURANUSDM.
+- Key: `NASDAQ_DATA_LINK_KEY` constant in `dashboard.py`. Key: `GuzsYWXo26kTjhcNnj9B`.
+- Base URL: `https://data.nasdaq.com/api/v3/datasets/{DATABASE}/{SERIES}/data?api_key=KEY&limit=N&order=desc`
+- **Free tier includes:** equities (WIKI, EOD, NAEOD), some economic data. 50 calls/day limit.
+- **CHRIS database (CME continuous futures) requires paid subscription** — confirmed blocked at account level via Imperva/Incapsula 403. UX1! uranium futures, and all other CME continuous futures, unavailable on free tier.
+- Currently unused in dashboard — uranium switched to FRED PURANUSDM. Key retained for future use with free-tier datasets (equity data etc.).
 
 ## FRED API
 - Endpoint: `https://api.stlouisfed.org/fred/series/observations?series_id=X&api_key=KEY&file_type=json&sort_order=asc`
@@ -224,3 +226,5 @@ CNN API provides `previous_close` for composite F&G but NOT for `put_and_call_op
 | 2026-06-11 | Uranium switched from Nasdaq Data Link CHRIS/CME_UX1 to FRED PURANUSDM — CHRIS requires paid subscription, blocked by Imperva at account level |
 | 2026-06-11 | meta http-equiv refresh reverted — was breaking yfinance fetches by reloading browser mid-request; restored time.sleep(120) + st.rerun() |
 | 2026-06-11 | Uranium added to FRED prefetch threads (PURANUSDM); delta = month-on-month |
+| 2026-06-11 | Added Aluminium (ALI=F) to commodities between Copper and Uranium |
+| 2026-06-11 | Fixed Python 3.14 asyncio crash — replaced time.sleep+st.rerun() with streamlit-autorefresh (JS-based interval, no event loop conflict) |

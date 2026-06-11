@@ -5,6 +5,7 @@ import time
 import threading
 import json
 import os
+from streamlit_autorefresh import st_autorefresh
 
 # Single unified daily cache file — all cross-session persistent data lives here.
 # Structure: { "key": { "prev": X, "today": X, "today_date": "YYYY-MM-DD", ... } }
@@ -450,8 +451,9 @@ show_metric(cols[1], "Brent Crude", "BZ=F", "Brent crude futures. Global benchma
 show_metric(cols[2], "Gold", "GC=F", "Gold futures. Safe haven. Rising = risk-off, inflation hedge, or dollar weakness.")
 show_metric(cols[3], "Silver", "SI=F", "Silver futures. Industrial + safe haven hybrid. Tracks gold but more volatile.")
 show_metric(cols[4], "Copper", "HG=F", "Copper futures. Leading indicator of global economic health. Rising = growth.")
+show_metric(cols[5], "Aluminium", "ALI=F", "Aluminium futures (COMEX). Industrial metal — sensitive to manufacturing, construction, and China demand. Rising = global growth. Normal: $0.90–$1.20/lb. Elevated: >$1.20.")
 u_price, u_prev, u_date = fetch_uranium()
-with cols[5]:
+with cols[6]:
     if u_price is not None:
         u_delta = round(u_price - u_prev, 2) if u_prev else None
         u_pct = round((u_delta / u_prev) * 100, 2) if u_delta and u_prev else None
@@ -485,5 +487,4 @@ show_metric(cols[1], "USD/JPY", "JPY=X", "Dollar vs Yen. Rising = risk-on. Falli
 show_metric(cols[2], "GBP/USD", "GBPUSD=X", "Pound vs Dollar. Sensitive to UK macro and global risk appetite.")
 show_metric(cols[3], "USD/CNY", "USDCNY=X", "Dollar vs Yuan. Rising = yuan weakening, often signals China stress.")
 
-time.sleep(120)
-st.rerun()
+st_autorefresh(interval=120000, key="dashboard_refresh")
