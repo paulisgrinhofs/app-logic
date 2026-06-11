@@ -125,7 +125,8 @@ def _fetch_fred_raw(series_id):
     return []
 
 def _fetch_uranium_raw():
-    """Fetch UX1! settlement from Nasdaq Data Link. Returns (price, date) or (None, None)."""
+    """Fetch UX1! settlement from Nasdaq Data Link. Returns (price, date) or (None, None).
+    Only called when today's value is missing from .daily_cache.json — at most once per day."""
     try:
         url = (f"https://data.nasdaq.com/api/v3/datasets/CHRIS/CME_UX1/data"
                f"?api_key={NASDAQ_DATA_LINK_KEY}&limit=2&order=desc")
@@ -133,7 +134,6 @@ def _fetch_uranium_raw():
         if r.status_code == 200:
             rows = r.json().get('dataset_data', {}).get('data', [])
             if rows:
-                # row: [date, open, high, low, last, settle, change, volume, open_interest, ...]
                 price = round(float(rows[0][5]), 2)
                 date = rows[0][0]
                 return price, date
@@ -142,14 +142,25 @@ def _fetch_uranium_raw():
     return None, None
 
 def fetch_uranium():
+    today = time.strftime("%Y-%m-%d")
+    # Check session_state first (fastest)
     cache = st.session_state.get('uranium_cache')
-    if cache and time.time() - cache['ts'] < 86400:
+    if cache and cache.get('date_fetched') == today:
         return cache['value'], cache['prev'], cache['date']
+    # Check daily_cache.json — already fetched today, no Nasdaq call needed
+    daily = _load_daily_cache().get('uranium', {})
+    if daily.get('today_date') == today and daily.get('today') is not None:
+        prev = daily.get('prev')
+        price = daily['today']
+        date = daily['today_date']
+        st.session_state['uranium_cache'] = {'value': price, 'prev': prev, 'date': date, 'date_fetched': today}
+        return price, prev, date
+    # Not in file yet — call Nasdaq (once today)
     price, date = _fetch_uranium_raw()
     if price is not None:
         prev = _daily_prev("uranium")
         _daily_update("uranium", price)
-        st.session_state['uranium_cache'] = {'value': price, 'prev': prev, 'date': date, 'ts': time.time()}
+        st.session_state['uranium_cache'] = {'value': price, 'prev': prev, 'date': date, 'date_fetched': today}
         return price, prev, date
     return None, None, None
 
@@ -174,13 +185,18 @@ def _prefetch_slow():
             results[cache_key] = {'value': obs[-1][1], 'mom': round(obs[-1][1] - obs[-2][1], 1), 'date': obs[-1][0], 'ts': time.time()}
 
     def _uranium():
-        if st.session_state.get('uranium_cache') and time.time() - st.session_state['uranium_cache']['ts'] < 86400:
+        today = time.strftime("%Y-%m-%d")
+        # If already in file for today, load from file — no Nasdaq call
+        daily = _load_daily_cache().get('uranium', {})
+        if daily.get('today_date') == today and daily.get('today') is not None:
+            results['uranium_cache'] = {'value': daily['today'], 'prev': daily.get('prev'), 'date': today, 'date_fetched': today}
             return
+        # Not in file — call Nasdaq once
         price, date = _fetch_uranium_raw()
         if price is not None:
             prev = _daily_prev("uranium")
             _daily_update("uranium", price)
-            results['uranium_cache'] = {'value': price, 'prev': prev, 'date': date, 'ts': time.time()}
+            results['uranium_cache'] = {'value': price, 'prev': prev, 'date': date, 'date_fetched': today}
 
     threads = [
         threading.Thread(target=_fred, args=("ICSA", "fred_icsa", "single")),
