@@ -183,12 +183,26 @@ All FRED data uses the JSON API (`api.stlouisfed.org/fred/series/observations`) 
 - CSV endpoint (`fred.stlouisfed.org/graph/fredgraph.csv`) times out on user's network — JSON API used instead.
 - API key stored as `FRED_API_KEY` constant in `dashboard.py`.
 
-## Put/Call Persistence
-- Previous day value stored in `macro-app/.pc_prev.json` as `{"score": X, "date": "YYYY-MM-DD"}`.
-- On each fetch: load file → if date is a previous calendar day, use as reference → save today's value only once (first fetch of the day, will not overwrite).
-- File committed to GitHub so it persists across machines and fresh clones.
-- To manually set yesterday's reference: update `score` and `date` in the file and push.
-- CNN API provides `previous_close` for the composite F&G score but NOT for `put_and_call_options` sub-component — disk persistence is the only way to get a cross-session delta.
+## Daily Cache (`macro-app/.daily_cache.json`)
+Single unified file for all cross-session persistent data. Replaces `.pc_prev.json`.
+
+Structure:
+```json
+{
+  "put_call": {"prev": 34.0, "today": 26.0, "today_date": "2026-06-11"},
+  "uranium":  {"prev": null, "today": 65.5, "today_date": "2026-06-11"}
+}
+```
+
+Logic (shared `_daily_update(key, value)` / `_daily_prev(key)`):
+- Each key has `prev` (yesterday, read-only during the day) and `today`/`today_date` (updated every fetch)
+- At midnight rollover: `today` promotes to `prev` automatically
+- File committed to GitHub — persists across machines and fresh clones
+- To manually set a reference value: edit `prev` for the relevant key and push
+
+Adding a new data source: add a new key to `.daily_cache.json`, call `_daily_prev("key")` to read and `_daily_update("key", value)` to write.
+
+CNN API provides `previous_close` for composite F&G but NOT for `put_and_call_options` — disk persistence is the only way to get a cross-session delta for Put/Call.
 
 ## Change Log
 | Date | Change |
@@ -201,4 +215,5 @@ All FRED data uses the JSON API (`api.stlouisfed.org/fred/series/observations`) 
 | 2026-06-11 | `.pc_prev.json` tracked in GitHub repo — persists across machines and fresh clones |
 | 2026-06-11 | Put/Call save logic fixed — date-keyed, locks reference on first fetch of day, does not overwrite within same calendar day |
 | 2026-06-11 | Added Uranium (UX1!) to commodities — CME front-month futures via Nasdaq Data Link free tier (CHRIS/CME_UX1). Cached 24hr. API key: NASDAQ_DATA_LINK_KEY constant. |
-| 2026-06-11 | Fixed Python 3.14 asyncio crash — FRED threads now write to plain dict, copy to session_state on main thread |
+| 2026-06-11 | Fixed Python 3.14 asyncio crash — FRED threads write to plain dict, copy to session_state on main thread; st.rerun() wrapped in try/except |
+| 2026-06-11 | Unified daily cache — .pc_prev.json replaced by .daily_cache.json; all cross-session persistent data in one file; extendable with new keys |

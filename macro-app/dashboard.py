@@ -6,40 +6,45 @@ import threading
 import json
 import os
 
-_PC_PREV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".pc_prev.json")
+# Single unified daily cache file — all cross-session persistent data lives here.
+# Structure: { "key": { "prev": X, "today": X, "today_date": "YYYY-MM-DD", ... } }
+_DAILY_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".daily_cache.json")
 
-def _load_pc_prev():
-    """Return yesterday's closing Put/Call score."""
+def _load_daily_cache():
     try:
-        with open(_PC_PREV_FILE) as f:
-            return json.load(f).get("prev_score")
+        with open(_DAILY_CACHE_FILE) as f:
+            return json.load(f)
     except:
-        return None
+        return {}
 
-def _save_pc_prev(score):
-    """
-    Maintain two slots: prev_score (yesterday, never overwritten during the day)
-    and today_score/today_date (updated each fetch).
-    At midnight rollover: today becomes prev.
-    """
+def _save_daily_cache(data):
     try:
-        today = time.strftime("%Y-%m-%d")
-        data = {}
-        try:
-            with open(_PC_PREV_FILE) as f:
-                data = json.load(f)
-        except:
-            pass
-        # If today_date has rolled to a new day, promote today -> prev
-        if data.get("today_date") and data["today_date"] != today:
-            data["prev_score"] = data.get("today_score")
-        # Always update today slot
-        data["today_score"] = score
-        data["today_date"] = today
-        with open(_PC_PREV_FILE, "w") as f:
-            json.dump(data, f)
+        with open(_DAILY_CACHE_FILE, "w") as f:
+            json.dump(data, f, indent=2)
     except:
         pass
+
+def _daily_prev(key):
+    """Return yesterday's value for a given key."""
+    return _load_daily_cache().get(key, {}).get("prev")
+
+def _daily_update(key, today_value):
+    """Update today's value; roll today->prev at midnight."""
+    today = time.strftime("%Y-%m-%d")
+    cache = _load_daily_cache()
+    entry = cache.get(key, {})
+    if entry.get("today_date") and entry["today_date"] != today:
+        entry["prev"] = entry.get("today")
+    entry["today"] = today_value
+    entry["today_date"] = today
+    cache[key] = entry
+    _save_daily_cache(cache)
+
+def _load_pc_prev():
+    return _daily_prev("put_call")
+
+def _save_pc_prev(score):
+    _daily_update("put_call", score)
 
 st.set_page_config(layout="wide")
 st.title("Macro Dashboard")
@@ -119,25 +124,33 @@ def _fetch_fred_raw(series_id):
         pass
     return []
 
-def fetch_uranium():
-    cache_key = 'uranium_cache'
-    cache = st.session_state.get(cache_key)
-    if cache and time.time() - cache['ts'] < 86400:
-        return cache['value'], cache['prev'], cache['date']
+def _fetch_uranium_raw():
+    """Fetch UX1! settlement from Nasdaq Data Link. Returns (price, date) or (None, None)."""
     try:
         url = (f"https://data.nasdaq.com/api/v3/datasets/CHRIS/CME_UX1/data"
                f"?api_key={NASDAQ_DATA_LINK_KEY}&limit=2&order=desc")
-        r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+        r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
         if r.status_code == 200:
-            rows = r.json()['dataset_data']['data']
-            # row: [date, open, high, low, last, settle, change, volume, open_interest, prev_day_open_int]
-            price = round(float(rows[0][5]), 2)  # settle price
-            prev = round(float(rows[1][5]), 2) if len(rows) > 1 else None
-            date = rows[0][0]
-            st.session_state[cache_key] = {'value': price, 'prev': prev, 'date': date, 'ts': time.time()}
-            return price, prev, date
+            rows = r.json().get('dataset_data', {}).get('data', [])
+            if rows:
+                # row: [date, open, high, low, last, settle, change, volume, open_interest, ...]
+                price = round(float(rows[0][5]), 2)
+                date = rows[0][0]
+                return price, date
     except:
         pass
+    return None, None
+
+def fetch_uranium():
+    cache = st.session_state.get('uranium_cache')
+    if cache and time.time() - cache['ts'] < 86400:
+        return cache['value'], cache['prev'], cache['date']
+    price, date = _fetch_uranium_raw()
+    if price is not None:
+        prev = _daily_prev("uranium")
+        _daily_update("uranium", price)
+        st.session_state['uranium_cache'] = {'value': price, 'prev': prev, 'date': date, 'ts': time.time()}
+        return price, prev, date
     return None, None, None
 
 def _prefetch_slow():
@@ -160,10 +173,20 @@ def _prefetch_slow():
             mom = round(obs[-1][1] - obs[-2][1], 1)
             results[cache_key] = {'value': obs[-1][1], 'mom': round(obs[-1][1] - obs[-2][1], 1), 'date': obs[-1][0], 'ts': time.time()}
 
+    def _uranium():
+        if st.session_state.get('uranium_cache') and time.time() - st.session_state['uranium_cache']['ts'] < 86400:
+            return
+        price, date = _fetch_uranium_raw()
+        if price is not None:
+            prev = _daily_prev("uranium")
+            _daily_update("uranium", price)
+            results['uranium_cache'] = {'value': price, 'prev': prev, 'date': date, 'ts': time.time()}
+
     threads = [
         threading.Thread(target=_fred, args=("ICSA", "fred_icsa", "single")),
         threading.Thread(target=_fred, args=("CPIAUCSL", "fred_cpi", "yoy")),
         threading.Thread(target=_fred, args=("PAYEMS", "fred_nfp", "mom")),
+        threading.Thread(target=_uranium),
     ]
     for t in threads:
         t.daemon = True
@@ -487,4 +510,7 @@ show_metric(cols[2], "GBP/USD", "GBPUSD=X", "Pound vs Dollar. Sensitive to UK ma
 show_metric(cols[3], "USD/CNY", "USDCNY=X", "Dollar vs Yuan. Rising = yuan weakening, often signals China stress.")
 
 time.sleep(120)
-st.rerun()
+try:
+    st.rerun()
+except Exception:
+    pass
