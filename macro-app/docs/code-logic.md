@@ -21,8 +21,8 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 | `fetch_fred_yoy(series_id, cache_key)` | YoY % change: `obs[-1]` vs `obs[-13]`. Used for CPI. Returns `(value, yoy_pct, date)`. Cached 1hr. |
 | `fetch_fred_mom(series_id, cache_key)` | Month-on-month change: `obs[-1]` minus `obs[-2]`. Used for NFP. Returns `(value, mom, date)`. Cached 1hr. |
 | `fetch_put_call()` | CNN F&G API `put_and_call_options.score`. Delta persisted to `.pc_prev.json` on disk — survives Streamlit restarts. Compares current score to last known value. |
-| `_load_pc_prev()` | Reads previous Put/Call score from `.pc_prev.json`. Returns score only if saved date is a previous calendar day — never today's value. Returns None on first run. |
-| `_save_pc_prev(score)` | Writes current score + today's date to `.pc_prev.json`. Will not overwrite if file already has today's date — so the reference point is locked at first fetch of each day. |
+| `_load_pc_prev()` | Reads previous Put/Call score from `macro-app/.pc_prev.json`. Returns score only if saved date is a previous calendar day. Returns None on first ever run. |
+| `_save_pc_prev(score)` | Writes current score + today's date to `.pc_prev.json`. Will not overwrite if file already has today's date — reference point locked at first fetch of each day. File is committed to GitHub so it persists across machines and fresh clones. |
 | `fetch_fear_greed_cnn()` | CNN F&G composite score + rating + delta from `fear_and_greed.previous_close` |
 | `fetch_fear_greed_crypto()` | alternative.me crypto F&G, `?limit=2` for today + yesterday delta |
 | `shorten_rating(rating)` | Abbreviates long ratings (Extreme Fear → Ext Fear) to prevent truncation in 160px columns |
