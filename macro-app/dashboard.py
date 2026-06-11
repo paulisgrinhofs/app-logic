@@ -254,8 +254,8 @@ with cols[3]:
 # --- EQUITY FUTURES & INDICES ---
 st.markdown("### Equity Futures & Indices")
 cols = st.columns(8)
-show_metric(cols[0], "S&P 500", "ES=F", "S&P 500 futures (ES=F). Trades 24/7, captures overnight macro risk.")
-show_metric(cols[1], "NASDAQ", "NQ=F", "NASDAQ 100 futures (NQ=F). Leads tech/growth sentiment.")
+show_metric(cols[0], "S&P 500", "^GSPC", "S&P 500 cash index (^GSPC). % change vs yesterday's official 4pm close — matches what Bloomberg/Finviz report. Goes stale outside market hours.")
+show_metric(cols[1], "NASDAQ 100", "^NDX", "NASDAQ 100 cash index (^NDX). % change vs yesterday's official close. Futures (NQ=F) were used previously but their % change was misleading — measured vs futures settlement, not cash close.")
 show_metric(cols[2], "Nikkei", "^N225", "Japan cash index. Leads Asian session. Sensitive to USD/JPY and global risk.")
 show_metric(cols[3], "EuroStoxx", "^STOXX50E", "Europe cash index. Sensitive to EUR, ECB policy, energy prices.")
 show_metric(cols[4], "DAX", "^GDAXI", "Germany cash index. Export-heavy, sensitive to China growth and EUR.")

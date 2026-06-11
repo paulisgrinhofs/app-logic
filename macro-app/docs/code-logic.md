@@ -62,8 +62,8 @@ US indices use futures (24/7, captures overnight risk). International use cash (
 
 | Label | Ticker | Type |
 |-------|--------|------|
-| S&P 500 | ES=F | Futures |
-| NASDAQ | NQ=F | Futures |
+| S&P 500 | ^GSPC | Cash | Switched from ES=F — futures % change was misleading (measures vs futures settlement, not 4pm cash close). Cash matches Bloomberg/Finviz. Stale outside market hours. |
+| NASDAQ 100 | ^NDX | Cash | Switched from NQ=F — same reason. Label updated from "NASDAQ" to "NASDAQ 100" for clarity. |
 | Nikkei | ^N225 | Cash |
 | EuroStoxx | ^STOXX50E | Cash |
 | DAX | ^GDAXI | Cash |
