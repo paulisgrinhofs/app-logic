@@ -161,6 +161,7 @@ All FRED data uses the JSON API (`api.stlouisfed.org/fred/series/observations`) 
 ## Open Items
 - DXY: using spot `DX-Y.NYB` — small discrepancy vs Finviz (`DX=F`). Fix when alternative source found.
 - International equity indices: cash prices go stale when markets are closed.
+- S&P 500 and NASDAQ 100: switched to cash (^GSPC, ^NDX) — go stale outside market hours. Futures (ES=F, NQ=F) had misleading % change (measured vs futures settlement not 4pm close).
 - FRED next release dates: requires FRED release calendar API endpoint. Add when needed.
 - Sector ETF flow row: planned next build. Will need `fetch_with_volume()` for price + volume vs 20-day avg.
 - Events calendar: planned future build. Will consume `release_date` and `next_date` fields.
@@ -173,3 +174,21 @@ All FRED data uses the JSON API (`api.stlouisfed.org/fred/series/observations`) 
 - Endpoint: `https://api.stlouisfed.org/fred/series/observations?series_id=X&api_key=KEY&file_type=json&sort_order=asc`
 - CSV endpoint (`fred.stlouisfed.org/graph/fredgraph.csv`) times out on user's network — JSON API used instead.
 - API key stored as `FRED_API_KEY` constant in `dashboard.py`.
+
+## Put/Call Persistence
+- Previous day value stored in `macro-app/.pc_prev.json` as `{"score": X, "date": "YYYY-MM-DD"}`.
+- On each fetch: load file → if date is a previous calendar day, use as reference → save today's value only once (first fetch of the day, will not overwrite).
+- File committed to GitHub so it persists across machines and fresh clones.
+- To manually set yesterday's reference: update `score` and `date` in the file and push.
+- CNN API provides `previous_close` for the composite F&G score but NOT for `put_and_call_options` sub-component — disk persistence is the only way to get a cross-session delta.
+
+## Change Log
+| Date | Change |
+|------|--------|
+| 2026-06-10 | Switch FRED from CSV to JSON API with key — CSV timed out on user network |
+| 2026-06-10 | ZQ=F (Fed Funds) moved to inline fetch — Streamlit silently blocks session_state writes from background threads |
+| 2026-06-10 | Put/Call delta persisted to `.pc_prev.json` — survives restarts, compares vs previous calendar day |
+| 2026-06-11 | S&P 500 switched from ES=F to ^GSPC — futures % change was misleading (vs settlement not 4pm close) |
+| 2026-06-11 | NASDAQ switched from NQ=F to ^NDX, label updated to "NASDAQ 100" |
+| 2026-06-11 | `.pc_prev.json` tracked in GitHub repo — persists across machines and fresh clones |
+| 2026-06-11 | Put/Call save logic fixed — date-keyed, locks reference on first fetch of day, does not overwrite within same calendar day |
