@@ -450,8 +450,8 @@ show_metric(cols[0], "WTI Crude", "CL=F", "WTI crude futures. US benchmark. Key 
 show_metric(cols[1], "Brent Crude", "BZ=F", "Brent crude futures. Global benchmark. Slightly higher than WTI typically. TW: TVC:UKOIL")
 show_metric(cols[2], "Gold", "GC=F", "Gold futures. Safe haven. Rising = risk-off, inflation hedge, or dollar weakness. TW: COMEX:GC1!")
 show_metric(cols[3], "Silver", "SI=F", "Silver futures. Industrial + safe haven hybrid. Tracks gold but more volatile. TW: COMEX:SI1!")
-show_metric(cols[4], "Copper", "HG=F", "Copper futures (COMEX). Leading indicator of global economic health. Price in $/lb. Normal: $3.50–$4.50/lb. Elevated: >$4.50/lb. Rising = global growth. TW: COMEX:HG1!")
-show_metric(cols[5], "Aluminium", "ALI=F", "Aluminium futures (COMEX). Industrial metal — sensitive to manufacturing, construction, and China demand. Price in $/metric tonne. Normal: $2,000–$2,650/t. Elevated: >$2,650/t. Rising = global growth. TW: COMEX:ALI1!")
+show_metric(cols[4], "Copper", "HG=F", "Copper futures (COMEX). Leading indicator of global economic health. Price in USD per lb. Normal: 3.50–4.50. Elevated: above 4.50. Rising = global growth. TW: COMEX:HG1!")
+show_metric(cols[5], "Aluminium", "ALI=F", "Aluminium futures (COMEX). Industrial metal — sensitive to manufacturing, construction, and China demand. Price in USD per metric tonne. Normal: 2,000–2,650. Elevated: above 2,650. Rising = global growth. TW: COMEX:ALI1!")
 u_price, u_prev, u_date = fetch_uranium()
 with cols[6]:
     if u_price is not None:
