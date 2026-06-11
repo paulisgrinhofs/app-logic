@@ -9,30 +9,35 @@ import os
 _PC_PREV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".pc_prev.json")
 
 def _load_pc_prev():
+    """Return yesterday's closing Put/Call score."""
     try:
         with open(_PC_PREV_FILE) as f:
-            data = json.load(f)
-            today = time.strftime("%Y-%m-%d")
-            # Only use if saved on a previous calendar day
-            if data.get("date") != today:
-                return data.get("score")
+            return json.load(f).get("prev_score")
     except:
-        pass
-    return None
+        return None
 
 def _save_pc_prev(score):
+    """
+    Maintain two slots: prev_score (yesterday, never overwritten during the day)
+    and today_score/today_date (updated each fetch).
+    At midnight rollover: today becomes prev.
+    """
     try:
         today = time.strftime("%Y-%m-%d")
+        data = {}
         try:
             with open(_PC_PREV_FILE) as f:
                 data = json.load(f)
-                # Already saved today — don't overwrite
-                if data.get("date") == today:
-                    return
         except:
             pass
+        # If today_date has rolled to a new day, promote today -> prev
+        if data.get("today_date") and data["today_date"] != today:
+            data["prev_score"] = data.get("today_score")
+        # Always update today slot
+        data["today_score"] = score
+        data["today_date"] = today
         with open(_PC_PREV_FILE, "w") as f:
-            json.dump({"score": score, "date": today}, f)
+            json.dump(data, f)
     except:
         pass
 
