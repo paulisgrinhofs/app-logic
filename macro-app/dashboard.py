@@ -124,52 +124,17 @@ def _fetch_fred_raw(series_id):
         pass
     return []
 
-def _fetch_uranium_raw():
-    """Fetch UX1! settlement from Nasdaq Data Link. Returns (price, date) or (None, None).
-    Only called when today's value is missing from .daily_cache.json — at most once per day."""
-    try:
-        url = (f"https://data.nasdaq.com/api/v3/datasets/CHRIS/CME_UX1/data"
-               f"?api_key={NASDAQ_DATA_LINK_KEY}&limit=2&order=desc")
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Referer": "https://data.nasdaq.com/",
-            "Origin": "https://data.nasdaq.com",
-            "Connection": "keep-alive",
-        }
-        r = requests.get(url, timeout=10, headers=headers)
-        if r.status_code == 200:
-            rows = r.json().get('dataset_data', {}).get('data', [])
-            if rows:
-                price = round(float(rows[0][5]), 2)
-                date = rows[0][0]
-                return price, date
-    except:
-        pass
-    return None, None
-
 def fetch_uranium():
-    today = time.strftime("%Y-%m-%d")
-    # Check session_state first (fastest)
+    """Fetch uranium spot price from FRED PURANUSDM (World Bank monthly benchmark, $/lb)."""
     cache = st.session_state.get('uranium_cache')
-    if cache and cache.get('date_fetched') == today:
+    if cache and time.time() - cache['ts'] < 3600:
         return cache['value'], cache['prev'], cache['date']
-    # Check daily_cache.json — already fetched today, no Nasdaq call needed
-    daily = _load_daily_cache().get('uranium', {})
-    if daily.get('today_date') == today and daily.get('today') is not None:
-        prev = daily.get('prev')
-        price = daily['today']
-        date = daily['today_date']
-        st.session_state['uranium_cache'] = {'value': price, 'prev': prev, 'date': date, 'date_fetched': today}
-        return price, prev, date
-    # Not in file yet — call Nasdaq (once today)
-    price, date = _fetch_uranium_raw()
-    if price is not None:
-        prev = _daily_prev("uranium")
-        _daily_update("uranium", price)
-        st.session_state['uranium_cache'] = {'value': price, 'prev': prev, 'date': date, 'date_fetched': today}
+    obs = _fetch_fred_raw("PURANUSDM")
+    if len(obs) >= 2:
+        price = round(obs[-1][1], 2)
+        prev = round(obs[-2][1], 2)
+        date = obs[-1][0]
+        st.session_state['uranium_cache'] = {'value': price, 'prev': prev, 'date': date, 'ts': time.time()}
         return price, prev, date
     return None, None, None
 
@@ -193,25 +158,11 @@ def _prefetch_slow():
             mom = round(obs[-1][1] - obs[-2][1], 1)
             results[cache_key] = {'value': obs[-1][1], 'mom': round(obs[-1][1] - obs[-2][1], 1), 'date': obs[-1][0], 'ts': time.time()}
 
-    def _uranium():
-        today = time.strftime("%Y-%m-%d")
-        # If already in file for today, load from file — no Nasdaq call
-        daily = _load_daily_cache().get('uranium', {})
-        if daily.get('today_date') == today and daily.get('today') is not None:
-            results['uranium_cache'] = {'value': daily['today'], 'prev': daily.get('prev'), 'date': today, 'date_fetched': today}
-            return
-        # Not in file — call Nasdaq once
-        price, date = _fetch_uranium_raw()
-        if price is not None:
-            prev = _daily_prev("uranium")
-            _daily_update("uranium", price)
-            results['uranium_cache'] = {'value': price, 'prev': prev, 'date': date, 'date_fetched': today}
-
     threads = [
         threading.Thread(target=_fred, args=("ICSA", "fred_icsa", "single")),
         threading.Thread(target=_fred, args=("CPIAUCSL", "fred_cpi", "yoy")),
         threading.Thread(target=_fred, args=("PAYEMS", "fred_nfp", "mom")),
-        threading.Thread(target=_uranium),
+        threading.Thread(target=_fred, args=("PURANUSDM", "uranium_cache_fred", "single")),
     ]
     for t in threads:
         t.daemon = True
@@ -506,12 +457,12 @@ with cols[5]:
         u_pct = round((u_delta / u_prev) * 100, 2) if u_delta and u_prev else None
         st.metric(label="Uranium", value=f"${u_price}",
             delta=fmt_delta(u_delta, u_pct),
-            help=f"UX1! — NYMEX uranium front-month futures settlement ($/lb U₃O₈). "
-                 f"Source: CME via Nasdaq Data Link. Updated daily at market close. "
-                 f"Normal range: $40–$65/lb. Elevated: $65–$100. Crisis/squeeze: >$100. "
-                 f"(2024 peak: ~$106. 2020 low: ~$27). Last settlement: {u_date}.")
+            help=f"Uranium spot price ($/lb U₃O₈). Source: FRED PURANUSDM — World Bank global benchmark. "
+                 f"Monthly data, delta = month-on-month change. "
+                 f"Normal: $40–$65/lb. Elevated: $65–$100. Squeeze: >$100. "
+                 f"(2024 peak: ~$106. 2020 low: ~$27). Last release: {u_date}.")
     else:
-        st.metric(label="Uranium", value="n/a", help="UX1! uranium futures — Nasdaq Data Link.")
+        st.metric(label="Uranium", value="n/a", help="Uranium spot price — FRED PURANUSDM.")
 
 # --- CRYPTO ---
 st.markdown("### Crypto")
@@ -534,4 +485,5 @@ show_metric(cols[1], "USD/JPY", "JPY=X", "Dollar vs Yen. Rising = risk-on. Falli
 show_metric(cols[2], "GBP/USD", "GBPUSD=X", "Pound vs Dollar. Sensitive to UK macro and global risk appetite.")
 show_metric(cols[3], "USD/CNY", "USDCNY=X", "Dollar vs Yuan. Rising = yuan weakening, often signals China stress.")
 
-st.markdown('<meta http-equiv="refresh" content="120">', unsafe_allow_html=True)
+time.sleep(120)
+st.rerun()

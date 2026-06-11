@@ -134,7 +134,7 @@ All FRED data uses the JSON API (`api.stlouisfed.org/fred/series/observations`) 
 | Gold | GC=F | Safe haven / inflation hedge / dollar inverse |
 | Silver | SI=F | Industrial + safe haven hybrid |
 | Copper | HG=F | Global growth leading indicator |
-| Uranium | CHRIS/CME_UX1 (Nasdaq Data Link) | UX1! front-month continuous futures settlement ($/lb U₃O₈). Cached 24hr — 1 API call/day. Normal: $40–$65. Elevated: $65–$100. Crisis: >$100 (2024 peak ~$106). |
+| Uranium | FRED: PURANUSDM | World Bank global uranium spot benchmark ($/lb U₃O₈). Monthly. Delta = month-on-month. Normal: $40–$65. Elevated: $65–$100. Crisis: >$100 (2024 peak ~$106). Nasdaq Data Link CHRIS/CME_UX1 blocked — requires paid subscription. |
 
 ---
 
