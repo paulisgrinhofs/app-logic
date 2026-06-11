@@ -119,7 +119,10 @@ def _fetch_fred_raw(series_id):
     return []
 
 def _prefetch_slow():
-    """Run slow fetches in parallel threads before page renders."""
+    """Fetch FRED data in parallel threads. Results written to a plain dict,
+    then copied to session_state on the main thread to avoid Python 3.14 asyncio crash."""
+    results = {}
+
     def _fred(series_id, cache_key, mode):
         if st.session_state.get(cache_key) and time.time() - st.session_state[cache_key]['ts'] < 3600:
             return
@@ -127,13 +130,13 @@ def _prefetch_slow():
         if not obs:
             return
         if mode == 'single':
-            st.session_state[cache_key] = {'value': str(obs[-1][1]), 'date': obs[-1][0], 'ts': time.time()}
+            results[cache_key] = {'value': str(obs[-1][1]), 'date': obs[-1][0], 'ts': time.time()}
         elif mode == 'yoy' and len(obs) >= 13:
             yoy = round(((obs[-1][1] - obs[-13][1]) / obs[-13][1]) * 100, 2)
-            st.session_state[cache_key] = {'value': obs[-1][1], 'yoy': yoy, 'date': obs[-1][0], 'ts': time.time()}
+            results[cache_key] = {'value': obs[-1][1], 'yoy': yoy, 'date': obs[-1][0], 'ts': time.time()}
         elif mode == 'mom' and len(obs) >= 2:
             mom = round(obs[-1][1] - obs[-2][1], 1)
-            st.session_state[cache_key] = {'value': obs[-1][1], 'mom': mom, 'date': obs[-1][0], 'ts': time.time()}
+            results[cache_key] = {'value': obs[-1][1], 'mom': round(obs[-1][1] - obs[-2][1], 1), 'date': obs[-1][0], 'ts': time.time()}
 
     threads = [
         threading.Thread(target=_fred, args=("ICSA", "fred_icsa", "single")),
@@ -145,6 +148,9 @@ def _prefetch_slow():
         t.start()
     for t in threads:
         t.join(timeout=10)
+    # Write to session_state on main thread only
+    for k, v in results.items():
+        st.session_state[k] = v
 
 _prefetch_slow()
 
