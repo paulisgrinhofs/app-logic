@@ -134,6 +134,7 @@ All FRED data uses the JSON API (`api.stlouisfed.org/fred/series/observations`) 
 | Gold | GC=F | Safe haven / inflation hedge / dollar inverse |
 | Silver | SI=F | Industrial + safe haven hybrid |
 | Copper | HG=F | Global growth leading indicator |
+| Uranium | CHRIS/CME_UX1 (Nasdaq Data Link) | UX1! front-month continuous futures settlement ($/lb U₃O₈). Cached 24hr — 1 API call/day. Normal: $40–$65. Elevated: $65–$100. Crisis: >$100 (2024 peak ~$106). |
 
 ---
 
@@ -170,6 +171,13 @@ All FRED data uses the JSON API (`api.stlouisfed.org/fred/series/observations`) 
 ## Refresh Rate
 - **Current: 120 seconds (2 minutes).** FRED data cached 1hr in session_state — refresh only re-fetches yfinance and CNN calls.
 
+## Nasdaq Data Link API
+- Endpoint: `https://data.nasdaq.com/api/v3/datasets/CHRIS/CME_UX1/data?api_key=KEY&limit=2&order=desc`
+- Free tier: 50 calls/day. Dashboard uses 1 call/day (24hr cache).
+- Key stored as `NASDAQ_DATA_LINK_KEY` constant in `dashboard.py`.
+- Row format: `[date, open, high, low, last, settle, change, volume, open_interest, prev_day_open_int]` — index 5 is settlement price used.
+- 49 daily calls remain available for future series (natural gas, coal, lumber etc.)
+
 ## FRED API
 - Endpoint: `https://api.stlouisfed.org/fred/series/observations?series_id=X&api_key=KEY&file_type=json&sort_order=asc`
 - CSV endpoint (`fred.stlouisfed.org/graph/fredgraph.csv`) times out on user's network — JSON API used instead.
@@ -192,3 +200,5 @@ All FRED data uses the JSON API (`api.stlouisfed.org/fred/series/observations`) 
 | 2026-06-11 | NASDAQ switched from NQ=F to ^NDX, label updated to "NASDAQ 100" |
 | 2026-06-11 | `.pc_prev.json` tracked in GitHub repo — persists across machines and fresh clones |
 | 2026-06-11 | Put/Call save logic fixed — date-keyed, locks reference on first fetch of day, does not overwrite within same calendar day |
+| 2026-06-11 | Added Uranium (UX1!) to commodities — CME front-month futures via Nasdaq Data Link free tier (CHRIS/CME_UX1). Cached 24hr. API key: NASDAQ_DATA_LINK_KEY constant. |
+| 2026-06-11 | Fixed Python 3.14 asyncio crash — FRED threads now write to plain dict, copy to session_state on main thread |

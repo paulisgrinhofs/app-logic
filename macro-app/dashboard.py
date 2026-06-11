@@ -104,6 +104,7 @@ def _parse_fred_csv(text):
     return obs
 
 FRED_API_KEY = "eb55d58a724483b7bc037fa215b29dbf"
+NASDAQ_DATA_LINK_KEY = "GuzsYWXo26kTjhcNnj9B"
 
 def _fetch_fred_raw(series_id):
     try:
@@ -117,6 +118,27 @@ def _fetch_fred_raw(series_id):
     except:
         pass
     return []
+
+def fetch_uranium():
+    cache_key = 'uranium_cache'
+    cache = st.session_state.get(cache_key)
+    if cache and time.time() - cache['ts'] < 86400:
+        return cache['value'], cache['prev'], cache['date']
+    try:
+        url = (f"https://data.nasdaq.com/api/v3/datasets/CHRIS/CME_UX1/data"
+               f"?api_key={NASDAQ_DATA_LINK_KEY}&limit=2&order=desc")
+        r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+        if r.status_code == 200:
+            rows = r.json()['dataset_data']['data']
+            # row: [date, open, high, low, last, settle, change, volume, open_interest, prev_day_open_int]
+            price = round(float(rows[0][5]), 2)  # settle price
+            prev = round(float(rows[1][5]), 2) if len(rows) > 1 else None
+            date = rows[0][0]
+            st.session_state[cache_key] = {'value': price, 'prev': prev, 'date': date, 'ts': time.time()}
+            return price, prev, date
+    except:
+        pass
+    return None, None, None
 
 def _prefetch_slow():
     """Fetch FRED data in parallel threads. Results written to a plain dict,
@@ -429,6 +451,19 @@ show_metric(cols[1], "Brent Crude", "BZ=F", "Brent crude futures. Global benchma
 show_metric(cols[2], "Gold", "GC=F", "Gold futures. Safe haven. Rising = risk-off, inflation hedge, or dollar weakness.")
 show_metric(cols[3], "Silver", "SI=F", "Silver futures. Industrial + safe haven hybrid. Tracks gold but more volatile.")
 show_metric(cols[4], "Copper", "HG=F", "Copper futures. Leading indicator of global economic health. Rising = growth.")
+u_price, u_prev, u_date = fetch_uranium()
+with cols[5]:
+    if u_price is not None:
+        u_delta = round(u_price - u_prev, 2) if u_prev else None
+        u_pct = round((u_delta / u_prev) * 100, 2) if u_delta and u_prev else None
+        st.metric(label="Uranium", value=f"${u_price}",
+            delta=fmt_delta(u_delta, u_pct),
+            help=f"UX1! — NYMEX uranium front-month futures settlement ($/lb U₃O₈). "
+                 f"Source: CME via Nasdaq Data Link. Updated daily at market close. "
+                 f"Normal range: $40–$65/lb. Elevated: $65–$100. Crisis/squeeze: >$100. "
+                 f"(2024 peak: ~$106. 2020 low: ~$27). Last settlement: {u_date}.")
+    else:
+        st.metric(label="Uranium", value="n/a", help="UX1! uranium futures — Nasdaq Data Link.")
 
 # --- CRYPTO ---
 st.markdown("### Crypto")
