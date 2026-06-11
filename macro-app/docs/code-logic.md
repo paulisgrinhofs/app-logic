@@ -20,9 +20,14 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 | `fetch_fred(series_id, cache_key)` | Latest single value + date. Uses `_fetch_fred_raw`. Cached 1hr. |
 | `fetch_fred_yoy(series_id, cache_key)` | YoY % change: `obs[-1]` vs `obs[-13]`. Used for CPI. Returns `(value, yoy_pct, date)`. Cached 1hr. |
 | `fetch_fred_mom(series_id, cache_key)` | Month-on-month change: `obs[-1]` minus `obs[-2]`. Used for NFP. Returns `(value, mom, date)`. Cached 1hr. |
-| `fetch_put_call()` | CNN F&G API `put_and_call_options.score`. Delta persisted to `.pc_prev.json` on disk — survives Streamlit restarts. Compares current score to last known value. |
-| `_load_pc_prev()` | Reads previous Put/Call score from `macro-app/.pc_prev.json`. Returns score only if saved date is a previous calendar day. Returns None on first ever run. |
-| `_save_pc_prev(score)` | Writes current score + today's date to `.pc_prev.json`. Will not overwrite if file already has today's date — reference point locked at first fetch of each day. File is committed to GitHub so it persists across machines and fresh clones. |
+| `fetch_uranium()` | FRED PURANUSDM — World Bank monthly uranium spot price. Delta = month-on-month. Cached 1hr in session_state. |
+| `fetch_put_call()` | CNN F&G API `put_and_call_options.score`. Delta vs previous day via `.daily_cache.json`. |
+| `_load_daily_cache()` | Reads `.daily_cache.json` — unified file for all cross-session persistent values. |
+| `_save_daily_cache(data)` | Writes updated dict to `.daily_cache.json`. |
+| `_daily_prev(key)` | Returns yesterday's value for a given key from `.daily_cache.json`. |
+| `_daily_update(key, value)` | Updates today's value for a key; rolls today→prev at midnight. |
+| `_load_pc_prev()` | Thin wrapper — calls `_daily_prev("put_call")`. |
+| `_save_pc_prev(score)` | Thin wrapper — calls `_daily_update("put_call", score)`. |
 | `fetch_fear_greed_cnn()` | CNN F&G composite score + rating + delta from `fear_and_greed.previous_close` |
 | `fetch_fear_greed_crypto()` | alternative.me crypto F&G, `?limit=2` for today + yesterday delta |
 | `shorten_rating(rating)` | Abbreviates long ratings (Extreme Fear → Ext Fear) to prevent truncation in 160px columns |
@@ -172,11 +177,10 @@ All FRED data uses the JSON API (`api.stlouisfed.org/fred/series/observations`) 
 - **Current: 120 seconds (2 minutes).** FRED data cached 1hr in session_state — refresh only re-fetches yfinance and CNN calls.
 
 ## Nasdaq Data Link API
-- Endpoint: `https://data.nasdaq.com/api/v3/datasets/CHRIS/CME_UX1/data?api_key=KEY&limit=2&order=desc`
-- Free tier: 50 calls/day. Dashboard uses 1 call/day (24hr cache).
-- Key stored as `NASDAQ_DATA_LINK_KEY` constant in `dashboard.py`.
-- Row format: `[date, open, high, low, last, settle, change, volume, open_interest, prev_day_open_int]` — index 5 is settlement price used.
-- 49 daily calls remain available for future series (natural gas, coal, lumber etc.)
+- Key stored as `NASDAQ_DATA_LINK_KEY` constant in `dashboard.py` — reserved for future use.
+- **Free tier includes:** equities (WIKI, EOD) and some economic data. Does NOT include CME/NYMEX futures.
+- **CHRIS database (CME continuous futures) requires paid subscription** — confirmed blocked at account level via Imperva/Incapsula. UX1! uranium futures unavailable on free tier.
+- Currently unused in dashboard — uranium switched to FRED PURANUSDM.
 
 ## FRED API
 - Endpoint: `https://api.stlouisfed.org/fred/series/observations?series_id=X&api_key=KEY&file_type=json&sort_order=asc`
@@ -217,3 +221,6 @@ CNN API provides `previous_close` for composite F&G but NOT for `put_and_call_op
 | 2026-06-11 | Added Uranium (UX1!) to commodities — CME front-month futures via Nasdaq Data Link free tier (CHRIS/CME_UX1). Cached 24hr. API key: NASDAQ_DATA_LINK_KEY constant. |
 | 2026-06-11 | Fixed Python 3.14 asyncio crash — FRED threads write to plain dict, copy to session_state on main thread; st.rerun() wrapped in try/except |
 | 2026-06-11 | Unified daily cache — .pc_prev.json replaced by .daily_cache.json; all cross-session persistent data in one file; extendable with new keys |
+| 2026-06-11 | Uranium switched from Nasdaq Data Link CHRIS/CME_UX1 to FRED PURANUSDM — CHRIS requires paid subscription, blocked by Imperva at account level |
+| 2026-06-11 | meta http-equiv refresh reverted — was breaking yfinance fetches by reloading browser mid-request; restored time.sleep(120) + st.rerun() |
+| 2026-06-11 | Uranium added to FRED prefetch threads (PURANUSDM); delta = month-on-month |
