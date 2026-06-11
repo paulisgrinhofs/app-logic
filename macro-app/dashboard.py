@@ -130,7 +130,16 @@ def _fetch_uranium_raw():
     try:
         url = (f"https://data.nasdaq.com/api/v3/datasets/CHRIS/CME_UX1/data"
                f"?api_key={NASDAQ_DATA_LINK_KEY}&limit=2&order=desc")
-        r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Referer": "https://data.nasdaq.com/",
+            "Origin": "https://data.nasdaq.com",
+            "Connection": "keep-alive",
+        }
+        r = requests.get(url, timeout=10, headers=headers)
         if r.status_code == 200:
             rows = r.json().get('dataset_data', {}).get('data', [])
             if rows:
