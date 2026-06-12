@@ -229,3 +229,5 @@ CNN API provides `previous_close` for composite F&G but NOT for `put_and_call_op
 | 2026-06-11 | Added Aluminium (ALI=F) to commodities between Copper and Uranium |
 | 2026-06-11 | Fixed Python 3.14 asyncio crash — replaced time.sleep+st.rerun() with streamlit-autorefresh (JS-based interval, no event loop conflict) |
 | 2026-06-11 | Known issue: git pull does not restore .daily_cache.json if dashboard has modified it locally. Workaround: run `git checkout macro-app/.daily_cache.json && git pull` before starting dashboard to restore prev reference values. |
+| 2026-06-12 | Added TW ticker symbols to all tooltips for quick TradingView lookup. Fixed Copper/Aluminium reference levels ($/lb and $/metric tonne). |
+| 2026-06-12 | Investigated S&P/NASDAQ % mismatch vs Finviz — root cause: ^GSPC/^NDX show prior cash close (stale overnight), ES=F/NQ=F have roll-day splicing artifacts. Fix: auto-detect active CME front-month contract (ESM26.CME / NQM26.CME format). _cme_front_month() function rolls automatically on second Friday of expiry month. % change now matches Finviz/Bloomberg methodology (vs prior CME settlement). |
