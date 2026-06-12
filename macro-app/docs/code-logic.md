@@ -14,6 +14,8 @@ This document maps each section of `dashboard.py` to the corresponding logic in 
 |----------|---------|
 | `fmt_delta(delta, pct)` | Shared delta string formatter. Handles None safely. Returns `+1.2 (+0.5%)` style string or just `+1.2` if pct unavailable. |
 | `fetch(ticker)` | yfinance `fast_info` — last price, previous close, delta, % change |
+| `_cme_front_month(prefix)` | Returns active quarterly CME equity futures ticker (e.g. `ESM26.CME`). Rolls on second Friday of expiry month. Used for S&P 500 and NASDAQ 100. |
+| `_commodity_front_month(prefix, exchange, active_months, roll_day, roll_months_before)` | Returns active commodity futures ticker (e.g. `CLN26.NYM`). Per-commodity roll schedule. Used for all 6 commodity futures. |
 | `fetch_ratio(t1, t2)` | Fetches ratio of two tickers (e.g. HYG/TLT, RSP/SPY) with delta vs previous close ratio |
 | `_fetch_fred_raw(series_id)` | Fetches FRED observations via JSON API with API key. Returns list of `(date, float)` tuples, newest last. Cached 1hr. |
 | `_prefetch_slow()` | Runs FRED fetches (ICSA, CPIAUCSL, PAYEMS) in parallel threads before page renders. Writes results to `session_state`. ZQ=F excluded — fetched inline instead (Streamlit blocks session_state writes from threads). |
@@ -63,17 +65,19 @@ Contrarian signal at extremes: below 25 = long-term value buyers historically st
 
 ### 2. Equity Futures & Indices
 
-US indices use futures (24/7, captures overnight risk). International use cash (stale when markets closed).
+US indices use specific CME contract tickers (auto-detected by `_cme_front_month()`). International use cash (stale when markets closed — industry standard).
+
+**Delta methodology:** current price vs yesterday's official CME settlement price of the same contract. Matches Finviz/Bloomberg. Continuous rolling tickers (ES=F, NQ=F) were replaced because Yahoo Finance splices contracts on quarterly roll days, creating phantom % gaps that never happened in the market.
 
 | Label | Ticker | Type |
 |-------|--------|------|
-| S&P 500 | ^GSPC | Cash | Switched from ES=F — futures % change was misleading (measures vs futures settlement, not 4pm cash close). Cash matches Bloomberg/Finviz. Stale outside market hours. |
-| NASDAQ 100 | ^NDX | Cash | Switched from NQ=F — same reason. Label updated from "NASDAQ" to "NASDAQ 100" for clarity. |
-| Nikkei | ^N225 | Cash |
-| EuroStoxx | ^STOXX50E | Cash |
-| DAX | ^GDAXI | Cash |
-| KOSPI | ^KS11 | Cash |
-| CSI 300 | 000300.SS | Cash |
+| S&P 500 | ESM26.CME (auto) | Futures | Specific front-month contract, auto-rolls quarterly. % change vs prior CME settlement. |
+| NASDAQ 100 | NQM26.CME (auto) | Futures | Same. |
+| Nikkei | ^N225 | Cash | Stale when Tokyo closed — industry standard behaviour. |
+| EuroStoxx | ^STOXX50E | Cash | Stale when European session closed. |
+| DAX | ^GDAXI | Cash | Stale when Frankfurt closed. |
+| KOSPI | ^KS11 | Cash | Stale when Seoul closed. |
+| CSI 300 | 000300.SS | Cash | Stale when Shanghai closed. |
 
 ---
 
@@ -132,15 +136,17 @@ All FRED data uses the JSON API (`api.stlouisfed.org/fred/series/observations`) 
 
 ### 7. Commodity Futures
 
-| Label | Ticker | Purpose |
-|-------|--------|---------|
-| WTI Crude | CL=F | US oil benchmark + inflation signal |
-| Brent Crude | BZ=F | Global benchmark |
-| Gold | GC=F | Safe haven / inflation hedge / dollar inverse |
-| Silver | SI=F | Industrial + safe haven hybrid |
-| Copper | HG=F | Global growth leading indicator. Rising = expansion. Falling = slowdown signal. |
-| Aluminium | ALI=F | COMEX aluminium futures. Industrial metal — manufacturing, construction, China demand proxy. Normal: $0.90–$1.20/lb. |
-| Uranium | FRED: PURANUSDM | World Bank global uranium spot benchmark ($/lb U₃O₈). Monthly. Delta = month-on-month. Normal: $40–$65. Elevated: $65–$100. Crisis: >$100 (2024 peak ~$106). Nasdaq Data Link CHRIS/CME_UX1 blocked — requires paid subscription. |
+**Delta methodology:** all commodity futures use specific front-month contract tickers via `_commodity_front_month()`. Delta = current price vs prior CME/NYMEX settlement of the same contract. Continuous tickers (CL=F etc.) replaced — Yahoo Finance splices contracts on roll days creating phantom gaps. Roll schedules are per-commodity and auto-calculated.
+
+| Label | Ticker (auto) | Exchange | Roll | Purpose |
+|-------|--------------|----------|------|---------|
+| WTI Crude | CLN26.NYM (auto) | NYMEX | Monthly, ~day 20 of prior month. All 12 months trade. | US oil benchmark + inflation signal |
+| Brent Crude | BZQ26.NYM (auto) | NYMEX | Monthly, expires end of 2nd month before delivery — rolls earlier than WTI | Global benchmark |
+| Gold | GCQ26.CMX (auto) | COMEX | Even months (Feb/Apr/Jun/Aug/Oct/Dec), rolls ~day 25 of prior month | Safe haven / inflation hedge / dollar inverse |
+| Silver | SIN26.CMX (auto) | COMEX | Jan/Mar/May/Jul/Sep/Dec, rolls ~day 25 of prior month | Industrial + safe haven hybrid |
+| Copper | HGN26.CMX (auto) | COMEX | Mar/May/Jul/Sep/Dec, rolls ~day 25 of prior month | Global growth leading indicator. Price in USD per lb. Normal: 3.50–4.50. |
+| Aluminium | ALIN26.CMX (auto) | COMEX | Jan/Mar/May/Jul/Sep/Dec, rolls ~day 25 of prior month | Industrial metal. Price in USD per metric tonne. Normal: 2,000–2,650. |
+| Uranium | FRED: PURANUSDM | FRED | Monthly release — no roll issue | World Bank global uranium spot benchmark ($/lb U₃O₈). Delta = month-on-month. Normal: $40–$65. Elevated: $65–$100. Crisis: >$100. |
 
 ---
 
