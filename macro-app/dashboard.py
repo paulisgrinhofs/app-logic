@@ -483,12 +483,14 @@ with cols[3]:
         st.metric(label="NFP MoM", value="n/a", help="Non-Farm Payrolls MoM change from FRED (PAYEMS).")
 
 # --- COMMODITY FUTURES ---
-_cl  = _commodity_front_month("CL",  "NYM", list(range(1,13)), roll_day=20, roll_months_before=1)
-_bz  = _commodity_front_month("BZ",  "NYM", list(range(1,13)), roll_day=28, roll_months_before=2)
-_gc  = _commodity_front_month("GC",  "CMX", [2,4,6,8,10,12],  roll_day=25, roll_months_before=1)
-_si  = _commodity_front_month("SI",  "CMX", [1,3,5,7,9,12],   roll_day=25, roll_months_before=1)
-_hg  = _commodity_front_month("HG",  "CMX", [3,5,7,9,12],     roll_day=25, roll_months_before=1)
-_ali = _commodity_front_month("ALI", "CMX", [1,3,5,7,9,12],   roll_day=25, roll_months_before=1)
+# roll_day=13 — switches to next contract ~1 week before expiry to avoid thin liquidity window.
+# Prioritises clean delta signal over matching Finviz front-month exactly during that week.
+_cl  = _commodity_front_month("CL",  "NYM", list(range(1,13)), roll_day=13, roll_months_before=1)
+_bz  = _commodity_front_month("BZ",  "NYM", list(range(1,13)), roll_day=21, roll_months_before=2)
+_gc  = _commodity_front_month("GC",  "CMX", [2,4,6,8,10,12],  roll_day=18, roll_months_before=1)
+_si  = _commodity_front_month("SI",  "CMX", [1,3,5,7,9,12],   roll_day=18, roll_months_before=1)
+_hg  = _commodity_front_month("HG",  "CMX", [3,5,7,9,12],     roll_day=18, roll_months_before=1)
+_ali = _commodity_front_month("ALI", "CMX", [1,3,5,7,9,12],   roll_day=18, roll_months_before=1)
 
 st.markdown("### Commodity Futures")
 cols = st.columns(8)
