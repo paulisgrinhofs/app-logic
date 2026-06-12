@@ -5,7 +5,23 @@ import time
 import threading
 import json
 import os
+from datetime import datetime, timedelta
 from streamlit_autorefresh import st_autorefresh
+
+def _cme_front_month(prefix):
+    """Return the active CME front-month ticker (e.g. ESM26.CME).
+    Rolls to next contract on the second Friday of the expiry month
+    (volume shifts ~1 week before third-Friday expiration)."""
+    now = datetime.now()
+    quarters = [(3,"H"),(6,"M"),(9,"U"),(12,"Z")]
+    def second_friday(year, month):
+        d = datetime(year, month, 1)
+        first_fri = d + timedelta(days=(4 - d.weekday()) % 7)
+        return first_fri + timedelta(weeks=1)
+    for month, code in quarters:
+        if now < second_friday(now.year, month):
+            return f"{prefix}{code}{str(now.year)[2:]}.CME"
+    return f"{prefix}H{str(now.year+1)[2:]}.CME"
 
 # Single unified daily cache file — all cross-session persistent data lives here.
 # Structure: { "key": { "prev": X, "today": X, "today_date": "YYYY-MM-DD", ... } }
@@ -301,8 +317,10 @@ with cols[3]:
 # --- EQUITY FUTURES & INDICES ---
 st.markdown("### Equity Futures & Indices")
 cols = st.columns(8)
-show_metric(cols[0], "S&P 500", "^GSPC", "S&P 500 cash index. % change vs yesterday's 4pm close. TW: SP:SPX")
-show_metric(cols[1], "NASDAQ 100", "^NDX", "NASDAQ 100 cash index. % change vs yesterday's close. TW: NASDAQ:NDX")
+_es = _cme_front_month("ES")
+_nq = _cme_front_month("NQ")
+show_metric(cols[0], "S&P 500", _es, f"S&P 500 E-mini futures ({_es}). % change vs prior CME settlement — matches Finviz/Bloomberg. Auto-rolls quarterly. TW: CME_MINI:ES1!")
+show_metric(cols[1], "NASDAQ 100", _nq, f"NASDAQ 100 E-mini futures ({_nq}). % change vs prior CME settlement — matches Finviz/Bloomberg. Auto-rolls quarterly. TW: CME_MINI:NQ1!")
 show_metric(cols[2], "Nikkei", "^N225", "Japan cash index. Leads Asian session. Sensitive to USD/JPY and global risk. TW: TVC:NI225")
 show_metric(cols[3], "EuroStoxx", "^STOXX50E", "Europe cash index. Sensitive to EUR, ECB policy, energy prices. TW: TVC:SX5E")
 show_metric(cols[4], "DAX", "^GDAXI", "Germany cash index. Export-heavy, sensitive to China growth and EUR. TW: XETR:DAX")
