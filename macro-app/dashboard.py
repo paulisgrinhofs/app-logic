@@ -8,10 +8,10 @@ import os
 from datetime import datetime, timedelta
 from streamlit_autorefresh import st_autorefresh
 
+_MONTH_CODES = {1:'F',2:'G',3:'H',4:'J',5:'K',6:'M',7:'N',8:'Q',9:'U',10:'V',11:'X',12:'Z'}
+
 def _cme_front_month(prefix):
-    """Return the active CME front-month ticker (e.g. ESM26.CME).
-    Rolls to next contract on the second Friday of the expiry month
-    (volume shifts ~1 week before third-Friday expiration)."""
+    """Equity index futures (ES, NQ) — quarterly, rolls on second Friday of expiry month."""
     now = datetime.now()
     quarters = [(3,"H"),(6,"M"),(9,"U"),(12,"Z")]
     def second_friday(year, month):
@@ -22,6 +22,27 @@ def _cme_front_month(prefix):
         if now < second_friday(now.year, month):
             return f"{prefix}{code}{str(now.year)[2:]}.CME"
     return f"{prefix}H{str(now.year+1)[2:]}.CME"
+
+def _commodity_front_month(prefix, exchange, active_months, roll_day, roll_months_before=1):
+    """Commodity futures — returns specific contract ticker to avoid roll-day splicing gaps.
+    roll_day: approximate day of month when volume shifts to next contract.
+    roll_months_before: how many months before delivery the roll happens (2 for Brent)."""
+    now = datetime.now()
+    for year in [now.year, now.year + 1]:
+        for month in sorted(active_months):
+            rm = month - roll_months_before
+            ry = year
+            while rm <= 0:
+                rm += 12
+                ry -= 1
+            try:
+                roll_date = datetime(ry, rm, roll_day)
+            except ValueError:
+                roll_date = datetime(ry, rm, 28)
+            if now < roll_date:
+                return f"{prefix}{_MONTH_CODES[month]}{str(year)[2:]}.{exchange}"
+    return f"{prefix}{_MONTH_CODES[sorted(active_months)[0]]}{str(now.year+1)[2:]}.{exchange}"
+
 
 # Single unified daily cache file — all cross-session persistent data lives here.
 # Structure: { "key": { "prev": X, "today": X, "today_date": "YYYY-MM-DD", ... } }
@@ -462,14 +483,21 @@ with cols[3]:
         st.metric(label="NFP MoM", value="n/a", help="Non-Farm Payrolls MoM change from FRED (PAYEMS).")
 
 # --- COMMODITY FUTURES ---
+_cl  = _commodity_front_month("CL",  "NYM", list(range(1,13)), roll_day=20, roll_months_before=1)
+_bz  = _commodity_front_month("BZ",  "NYM", list(range(1,13)), roll_day=28, roll_months_before=2)
+_gc  = _commodity_front_month("GC",  "CMX", [2,4,6,8,10,12],  roll_day=25, roll_months_before=1)
+_si  = _commodity_front_month("SI",  "CMX", [1,3,5,7,9,12],   roll_day=25, roll_months_before=1)
+_hg  = _commodity_front_month("HG",  "CMX", [3,5,7,9,12],     roll_day=25, roll_months_before=1)
+_ali = _commodity_front_month("ALI", "CMX", [1,3,5,7,9,12],   roll_day=25, roll_months_before=1)
+
 st.markdown("### Commodity Futures")
 cols = st.columns(8)
-show_metric(cols[0], "WTI Crude", "CL=F", "WTI crude futures. US benchmark. Key for Energy sector and inflation. TW: NYMEX:CL1!")
-show_metric(cols[1], "Brent Crude", "BZ=F", "Brent crude futures. Global benchmark. Slightly higher than WTI typically. TW: TVC:UKOIL")
-show_metric(cols[2], "Gold", "GC=F", "Gold futures. Safe haven. Rising = risk-off, inflation hedge, or dollar weakness. TW: COMEX:GC1!")
-show_metric(cols[3], "Silver", "SI=F", "Silver futures. Industrial + safe haven hybrid. Tracks gold but more volatile. TW: COMEX:SI1!")
-show_metric(cols[4], "Copper", "HG=F", "Copper futures (COMEX). Leading indicator of global economic health. Price in USD per lb. Normal: 3.50–4.50. Elevated: above 4.50. Rising = global growth. TW: COMEX:HG1!")
-show_metric(cols[5], "Aluminium", "ALI=F", "Aluminium futures (COMEX). Industrial metal — sensitive to manufacturing, construction, and China demand. Price in USD per metric tonne. Normal: 2,000–2,650. Elevated: above 2,650. Rising = global growth. TW: COMEX:ALI1!")
+show_metric(cols[0], "WTI Crude",  _cl,  f"WTI crude futures ({_cl}). US benchmark. Key for Energy sector and inflation. Auto-rolls monthly. TW: NYMEX:CL1!")
+show_metric(cols[1], "Brent Crude",_bz,  f"Brent crude futures ({_bz}). Global benchmark. Expires 2 months before delivery — rolls earlier than WTI. TW: TVC:UKOIL")
+show_metric(cols[2], "Gold",       _gc,  f"Gold futures ({_gc}). Safe haven. Rising = risk-off, inflation hedge, or dollar weakness. TW: COMEX:GC1!")
+show_metric(cols[3], "Silver",     _si,  f"Silver futures ({_si}). Industrial + safe haven hybrid. Tracks gold but more volatile. TW: COMEX:SI1!")
+show_metric(cols[4], "Copper",     _hg,  f"Copper futures ({_hg}). Leading indicator of global economic health. Price in USD per lb. Normal: 3.50–4.50. Elevated: above 4.50. Rising = global growth. TW: COMEX:HG1!")
+show_metric(cols[5], "Aluminium",  _ali, f"Aluminium futures ({_ali}). Industrial metal — sensitive to manufacturing, construction, and China demand. Price in USD per metric tonne. Normal: 2,000–2,650. Elevated: above 2,650. Rising = global growth. TW: COMEX:ALI1!")
 u_price, u_prev, u_date = fetch_uranium()
 with cols[6]:
     if u_price is not None:
